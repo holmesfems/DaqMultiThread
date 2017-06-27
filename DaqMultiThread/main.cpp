@@ -149,6 +149,8 @@ public:
 
 std::queue<WriteParameter> dataQueue;
 
+std::atomic<TcpServer::TcpServer*> tcpServer;
+
 class Header
 {
 public:
@@ -395,17 +397,27 @@ void tcpThread()
 {
 	while (true)
 	{
-		std::string msg;
 		boost::asio::io_service io_service;
 		TcpServer::TcpServer server(io_service, tcpPort, cmdHelper, &std::cout);
+		tcpServer = &server;
 		server.start_accept();
 		io_service.run();
 		std::cout << "server status = " << server.status << std::endl;
+		tcpServer = NULL;
 		if (server.status == TcpServer::TcpServer::EXIT) break;
-		if (server.status == TcpServer::TcpServer::FAIL) continue;
-		if (server.status == TcpServer::TcpServer::LOST) continue;
-		//server.receive();
 	}
+}
+
+int output(std::string msg)
+{
+	std::cout << msg << std::endl;
+	std::cout.flush();
+	TcpServer::TcpServer *server = tcpServer;
+	if (server)
+	{
+		server->send(msg);
+	}
+	return 0;
 }
 
 int read()
@@ -430,8 +442,7 @@ int read()
 		DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan);
 		DAQmxBaseStartTask(taskHandle);
 		int j;
-		std::cout << "start reading,readTime = " << readTime << std::endl;
-		std::cout.flush();
+		output((boost::format("start reading, readTime = %d") % readTime).str());
 		for (j = 0; j < readTime || readTime < 0; j++)
 		{
 			int32	pointsRead = 0;
@@ -450,7 +461,7 @@ int read()
 			DAQmxBaseClearTask(taskHandle);
 		}
 		_writeThread.join();
-		std::cout << "stop reading , total for " << j << " seconds" << std::endl;
+		output((boost::format("stop reading, total read for: %d seconds") % j).str());
 	}
 	std::cout << "exit reading" << std::endl;
 	_tcpThread.join();
@@ -471,8 +482,21 @@ int makeClient()
 	boost::asio::io_service io_service;
 	TcpClient::TcpClient client(io_service);
 	client.connect("127.0.0.1", tcpPort);
-	io_service.run();
+	std::thread thread
+	(
+		[&io_service]()
+	{
+		io_service.run();
+	});
+	while (true)
+	{
+		std::string msg;
+		std::getline(std::cin, msg);
+		client.send(msg);
+		if (msg == "exit") break;
+	}
 	std::cout << "client exit" << std::endl;
+	thread.join();
 	return 0;
 }
 

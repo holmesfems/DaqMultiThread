@@ -45,6 +45,7 @@ namespace CmdHelper
 			CmdSend tosend = _str_to_cmd(tcmd);
 			return dispatchCmd(tosend.first, tosend.second);
 		}
+		return "blank";
 	}
 
 	std::string CmdHelper::dispatchCmd(const std::string & cmd, ParamSet::Params & split_param)

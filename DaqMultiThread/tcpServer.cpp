@@ -10,11 +10,13 @@
 
 namespace TcpServer
 {
-	TcpServer::TcpServer(boost::asio::io_service &io_service, uint16_t port, CmdHelper::CmdHelper &cmdHelper,std::ostream *os)
-		: _io_service(io_service),_acceptor(io_service,boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(),port)),
+	TcpServer::TcpServer(boost::asio::io_service &io_service, uint16_t port, CmdHelper::CmdHelper &cmdHelper, std::ostream *os)
+		: _io_service(io_service),
 		_socket(io_service),
 		_cmdHelper(cmdHelper),
-		_os(os)
+		_os(os),
+		_port(port),
+		_acceptor(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
 	{
 		if (_os == NULL) //dummy
 			_os = new std::ostringstream();
@@ -27,11 +29,17 @@ namespace TcpServer
 			boost::bind(&TcpServer::_on_accept, this, boost::asio::placeholders::error));
 	}
 
+	void TcpServer::send(std::string msg)
+	{
+		_msgQueue.push(msg + "\n");
+		_io_service.post(boost::bind(&TcpServer::_async_write, this));
+	}
+
 	void TcpServer::_on_accept(const boost::system::error_code &err)
 	{
 		if (err)
 		{
-			*_os << "Failed to accept" << std::endl;
+			*_os << "Failed to accept : " << err.message() << std::endl;
 			status = FAIL;
 		}
 		else
@@ -60,6 +68,7 @@ namespace TcpServer
 		if (err && err != boost::asio::error::eof) {
 			*_os << "receive failed: " << err.message() << std::endl;
 			status = FAIL;
+			//start_accept();
 		}
 		else {
 			*_os << "recieve succeed " << "length = " << bytes_transferred << std::endl;
@@ -69,14 +78,16 @@ namespace TcpServer
 			if (bytes_transferred == 0 && err == boost::asio::error::eof)
 			{
 				*_os << "connection lost!" << std::endl;
-				if(status != EXIT)
+				if (status != EXIT)
+				{
 					status = LOST;
+					//start_accept();
+				}
 //				_on_offline();
 			}
 			else
 			{
-				_async_write(_cmdHelper.exec(data) + "\n");
-
+				send(_cmdHelper.exec(data));
 				if (!(data == "exit"))
 				{
 					_receive_buff.consume(_receive_buff.size());
@@ -91,13 +102,16 @@ namespace TcpServer
 		}
 	}
 
-	void TcpServer::_async_write(std::string msg)
+	void TcpServer::_async_write()
 	{
+		if (_msgQueue.empty()) return;
+		std::string msg = _msgQueue.front();
 		boost::asio::async_write(
 			_socket,
 			boost::asio::buffer(msg.c_str(), msg.length()),
 			boost::bind(&TcpServer::_on_write, this,
 				boost::asio::placeholders::error));
+		_msgQueue.pop();
 	}
 
 	void TcpServer::_on_write(const boost::system::error_code & err)
@@ -109,6 +123,8 @@ namespace TcpServer
 		else
 		{
 			*_os << "write succeed" << std::endl;
+			if (!_msgQueue.empty())
+				_async_write();
 		}
 	}
 }
