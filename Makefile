@@ -22,7 +22,7 @@ LINKER   = $(CC) -o
 LFLAGS   = -Wall -I. -l"nidaqmxbase" -l"boost_system" -l"boost_filesystem" -l"boost_date_time"
 
 # change these to proper directories where each file should be
-SRCDIR   = DaqMulthiThread
+SRCDIR   = DaqMultiThread
 OBJDIR   = obj
 BINDIR   = bin
 
