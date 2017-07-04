@@ -79,7 +79,7 @@ using Filter = std::vector<std::string>;
 
 //Default parameters
 //Tcp parameters
-uint16_t tcpPort=23333;
+uint16_t tcpPort = 23333;
 
 //Task parameters
 int32       error = 0;
@@ -459,6 +459,7 @@ int read()
 		{
 			DAQmxBaseStopTask(taskHandle);
 			DAQmxBaseClearTask(taskHandle);
+			taskHandle = 0;
 		}
 		_writeThread.join();
 		output((boost::format("stop reading, total read for: %d seconds") % j).str());
@@ -492,6 +493,11 @@ int makeClient()
 	{
 		std::string msg;
 		std::getline(std::cin, msg);
+		if (msg == "clientExit")
+		{
+			io_service.stop();
+			break;
+		}
 		client.send(msg);
 		if (msg == "exit") break;
 	}

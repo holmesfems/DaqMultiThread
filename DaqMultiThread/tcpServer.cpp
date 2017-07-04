@@ -106,12 +106,12 @@ namespace TcpServer
 	{
 		if (_msgQueue.empty()) return;
 		std::string msg = _msgQueue.front();
+		_msgQueue.pop();
 		boost::asio::async_write(
 			_socket,
 			boost::asio::buffer(msg.c_str(), msg.length()),
 			boost::bind(&TcpServer::_on_write, this,
 				boost::asio::placeholders::error));
-		_msgQueue.pop();
 	}
 
 	void TcpServer::_on_write(const boost::system::error_code & err)
