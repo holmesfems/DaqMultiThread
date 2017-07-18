@@ -415,7 +415,8 @@ int output(std::string msg)
 	TcpServer::TcpServer *server = tcpServer;
 	if (server)
 	{
-		server->send(msg);
+		if (server->status == TcpServer::TcpServer::ONLINE)
+			server->send(msg);
 	}
 	return 0;
 }
@@ -493,13 +494,9 @@ int makeClient()
 	{
 		std::string msg;
 		std::getline(std::cin, msg);
-		if (msg == "clientExit")
-		{
-			io_service.stop();
-			break;
-		}
 		client.send(msg);
 		if (msg == "exit") break;
+		if (msg == "clientExit") break;
 	}
 	std::cout << "client exit" << std::endl;
 	thread.join();

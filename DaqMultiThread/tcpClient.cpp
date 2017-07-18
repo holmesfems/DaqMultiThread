@@ -79,6 +79,7 @@ namespace TcpClient
 		std::string msg = _msgQueue.front();
 		_msgQueue.pop();
 		if (msg == "exit") status = -1;
+		if (msg == "clientExit") status = -1;
 		msg = msg + "\n";
 		boost::asio::async_write(
 			_socket,
