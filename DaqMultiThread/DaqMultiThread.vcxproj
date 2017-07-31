@@ -68,6 +68,7 @@
     <ClCompile Include="stringTool.cpp" />
     <ClCompile Include="tcpClient.cpp" />
     <ClCompile Include="tcpServer.cpp" />
+    <ClCompile Include="writeHddThread.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CmdHelper.h" />
@@ -77,6 +78,7 @@
     <ClInclude Include="saveConfig.h" />
     <ClInclude Include="tcpClient.h" />
     <ClInclude Include="tcpServer.h" />
+    <ClInclude Include="writeHddThread.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

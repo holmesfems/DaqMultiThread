@@ -72,6 +72,7 @@
 #include "CmdHelper.h"
 #include "tcpServer.h"
 #include "tcpClient.h"
+#include "writeHddThread.h"
 
 #define DAQmxErrChk(functionCall) { if( DAQmxFailed(error=(functionCall)) ) { goto Error; } 
 //ParamFilter
@@ -108,10 +109,6 @@ int32       pointsToRead = -1;
 float64     timeout = 10.0; //sec
 int32       readSets = 10;
 
-// CheckOnOff:Ax+B>0?On:Off
-float64     checkA = -1;
-float64     checkB = 1.0;
-
 // ReadTime
 std::atomic<int32> readTime;//sec,-1 for infinity
 
@@ -120,7 +117,7 @@ ParamSet::ParamHelper *paramHelper;
 const std::string configFileName = "parameter.conf";
 
 //Mutex
-std::mutex writeFileMutex;
+//std::mutex writeFileMutex;
 std::mutex parameterMutex;
 //std::mutex readDataMutex[2];
 //TargetFileName
@@ -130,34 +127,16 @@ std::string targetFileName = "";
 CmdHelper::CmdMap cmdMap;
 CmdHelper::CmdHelper cmdHelper(cmdMap);
 
+//CheckOnOff
+double_t &checkA = WriteHddThread::checkA;
+double_t &checkB = WriteHddThread::checkB;
 //Flags
 std::atomic<int> readStatus;
 const int HOLD = 0;
 const int DO = 1;
 const int EXIT = -1;
-std::atomic<int> writeCmd;
-
-class WriteParameter
-{
-public:
-	int32 dataSize;
-	boost::posix_time::ptime ptime;
-	float64* data;
-	WriteParameter(boost::posix_time::ptime &ptime, int32 dataSize = 0, float64* data = NULL);
-	~WriteParameter();
-};
-
-std::queue<WriteParameter> dataQueue;
 
 std::atomic<TcpServer::TcpServer*> tcpServer;
-
-class Header
-{
-public:
-	int32_t bodySize;
-	boost::posix_time::ptime ptime;
-	int8 first;
-};
 
 
 std::string startRead(ParamSet::Params &params)
@@ -176,6 +155,7 @@ std::string startRead(ParamSet::Params &params)
 			filtered.push_back(item);
 		}
 	}
+	//default parameter = "readTime"
 	paramHelper->bind("", &readTime, ParamSet::ParamHelper::INTEGER);
 	paramHelper->set(filtered);
 	readStatus = DO;
@@ -197,6 +177,7 @@ std::string exitRead(ParamSet::Params &params)
 int initialize()
 {
 	paramHelper = new ParamSet::ParamHelper();
+	//initializing parameter binder
 	paramHelper->bind("channel", &channel, ParamSet::ParamHelper::TEXT);
 	paramHelper->bind("min", &min, ParamSet::ParamHelper::FLOAT64);
 	paramHelper->bind("max", &max, ParamSet::ParamHelper::FLOAT64);
@@ -246,92 +227,14 @@ int initialize()
 	cmdHelper.registCmd("exit", &exitRead, "exit read daq");
 	//data[0] = new float64[bufferSize];
 	//data[1] = new float64[bufferSize];
-	writeCmd = HOLD;
+	//writeCmd = HOLD;
 	readStatus = HOLD;
 	return 0;
 }
 
-bool checkOnOff(float64 datapoint)
-{
-	return ((checkA*datapoint + checkB) > 0);
-}
 
-/**
-*	Write the digital data to a file
-*	Format:
-*	[Header]
-*	    [int32](Count of the body bock,not includes the header)
-*		[ptime](timestamp)
-*		[int8](first status(0 for off or 1 for on))
-*	[Body]
-*	    \Loop until rear
-*			[int32](position's difference since one change to the last change)
-*		[int32](rear's distance from last change
-*	Example:
-*	data=11000111000111000
-*	[Header]=6,(time),1
-*	[Body]=233333
-*	\input
-*		filename: the name of target file,open with "wb+"
-*		dataNumber: the number of data block to read ,0 or 1
-*		dataSize: buffer size of a data block
-*		ptime: timestamp
-*/
-int writeEncode(std::ofstream &ofs, WriteParameter &wp)
-{
-	Header header;
-	if (wp.dataSize == 0 || wp.data == NULL) throw "Ill data";
-	std::vector<int32> body;
-	//encode
-	if (checkOnOff(wp.data[0]))
-	{
-		header.first = 1;
-	}
-	else
-	{
-		header.first = 0;
-	}
-	int32_t i = 0;
-	int32_t offset = 1;
-	bool status = !(header.first == 0);
-	for (i = 1; i < wp.dataSize; i++, offset++)
-	{
-		if (checkOnOff(wp.data[i]) ^ status)
-		{
-			status = !status;
-			body.push_back(offset);
-			offset = 0;
-		}
-	}
-	body.push_back(offset);
-	header.bodySize = body.size();
-	header.ptime = wp.ptime;
-	//encode_end
-	writeFileMutex.lock();
-	ofs.write((char*)&header, sizeof(Header));
-	ofs.write((char*)body.data(), sizeof(int32)*body.size());
-	writeFileMutex.unlock();
-	return 0;
-}
 
-int writeThread(std::string targetFileName)
-{
-	std::ofstream ofs;
-	ofs.open(targetFileName, std::ios::binary | std::ios::app);
-	while (true)
-	{
-		if (writeCmd == EXIT && dataQueue.size() == 0) break;
-		if (dataQueue.size() > 0)
-		{
-			writeEncode(ofs, dataQueue.front());
-			dataQueue.pop();
-		}
-		else
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-	ofs.close();
-	return 0;
-}
+
 
 int decode(std::string source, std::string target)
 {
@@ -339,7 +242,7 @@ int decode(std::string source, std::string target)
 	//std::vector<DataPoint> result;
 	std::ofstream ofs;
 	std::ifstream ifs;
-	writeFileMutex.lock();
+	//writeFileMutex.lock();
 	ifs.open(source, std::ios::binary);
 	ofs.open(target);
 	bool first = true;
@@ -348,6 +251,7 @@ int decode(std::string source, std::string target)
 	while (!ifs.eof())
 	{
 		//header
+		using Header = WriteHddThread::Header;
 		Header header;
 		ifs.read((char*)&header, sizeof(Header));
 		if (ifs.eof())
@@ -389,7 +293,7 @@ int decode(std::string source, std::string target)
 	ofs << position << "\t" << int32(value) << std::endl;
 	ifs.close();
 	ofs.close();
-	writeFileMutex.unlock();
+	//writeFileMutex.unlock();
 	return 0;
 }
 
@@ -435,13 +339,14 @@ int read()
 		}
 		if (readStatus == EXIT) break;
 		if (readStatus != DO) break;
-		writeCmd = HOLD;
+		//writeCmd = HOLD;
 		targetFileName = (boost::format("BS%s.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time())).str();
-		std::thread _writeThread(writeThread, targetFileName);
+		WriteHddThread::WriteHddThread thread(targetFileName);
 		DAQmxBaseCreateTask("", &taskHandle);
 		DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL);
 		DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan);
 		DAQmxBaseStartTask(taskHandle);
+		pointsToRead = samplesPerChan;
 		int j;
 		output((boost::format("start reading, readTime = %d") % readTime).str());
 		for (j = 0; j < readTime || readTime < 0; j++)
@@ -449,12 +354,13 @@ int read()
 			int32	pointsRead = 0;
 			rdata = new float64[bufferSize];
 			boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
-			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, 0, rdata, bufferSize, &pointsRead, NULL);
-			WriteParameter *wp = new WriteParameter(ptime, pointsRead, rdata);
-			dataQueue.push(std::move(*wp));
+			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize, &pointsRead, NULL);
+			thread.push(ptime, pointsRead, rdata);
+			delete rdata;
+			//dataQueue.push(std::move(*wp));
 			if (readStatus != DO) readTime = 0;
 		}
-		writeCmd = EXIT;
+		//writeCmd = EXIT;
 		readStatus = HOLD;
 		if (taskHandle != 0)
 		{
@@ -462,7 +368,7 @@ int read()
 			DAQmxBaseClearTask(taskHandle);
 			taskHandle = 0;
 		}
-		_writeThread.join();
+		//_writeThread.join();
 		output((boost::format("stop reading, total read for: %d seconds") % j).str());
 	}
 	std::cout << "exit reading" << std::endl;
@@ -530,18 +436,4 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-WriteParameter::WriteParameter(boost::posix_time::ptime & ptime, int32 dataSize, float64 * data)
-{
-	this->ptime = ptime;
-	this->dataSize = dataSize;
-	this->data = data;
-}
 
-WriteParameter::~WriteParameter()
-{
-	if (data != NULL)
-	{
-		delete data;
-		data = NULL;
-	}
-}
