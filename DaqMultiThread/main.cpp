@@ -341,11 +341,12 @@ int read()
 		if (readStatus != DO) break;
 		//writeCmd = HOLD;
 		size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
-		std::shared_ptr<WriteHddThread::WriteHddThread> wthreads[wthreadNum];
+		using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
+		std::vector<sharePtr_wthread> wthreads(wthreadNum);
 		for (int i = 0; i < wthreadNum; i++)
 		{
 			targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
-			wthreads[i] = std::shared_ptr<WriteHddThread::WriteHddThread>(new WriteHddThread::WriteHddThread(targetFileName));
+			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName));
 		}
 		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
 			throw "Error in creating task";
