@@ -1,9 +1,16 @@
 #include "writeHddThread.h"
 #include <fstream>
+#include <functional>
 namespace WriteHddThread
 {
 	double_t checkA = -1.0;
 	double_t checkB = 1.0;
+
+	bool checkOnOff(double_t datapoint)
+	{
+		return ((checkA*datapoint + checkB) > 0);
+	}
+
 	WriteParameter::WriteParameter(boost::posix_time::ptime & ptime, int32_t dataSize, double_t * data)
 	{
 		this->ptime = ptime;
@@ -73,16 +80,13 @@ namespace WriteHddThread
 		return 0;
 	}
 
-	bool checkOnOff(double_t datapoint)
-	{
-		return ((checkA*datapoint + checkB) > 0);
-	}
+
 
 	WriteHddThread::WriteHddThread(std::string &targetFileName):
 		_targetFileName(targetFileName)
 	{
 		_writeCmd = HOLD;
-		_writeThread = new std::thread(std::bind(WriteHddThread::_threadFunction, this));
+		_writeThread = new std::thread(std::bind(&WriteHddThread::_threadFunction, this));
 	}
 
 

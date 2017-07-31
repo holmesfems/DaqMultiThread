@@ -340,11 +340,19 @@ int read()
 		if (readStatus == EXIT) break;
 		if (readStatus != DO) break;
 		//writeCmd = HOLD;
-		targetFileName = (boost::format("BS%s.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time())).str();
-		WriteHddThread::WriteHddThread thread(targetFileName);
-		DAQmxBaseCreateTask("", &taskHandle);
-		DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL);
-		DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan);
+		size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
+		std::shared_ptr<WriteHddThread::WriteHddThread> wthreads[wthreadNum];
+		for (int i = 0; i < wthreadNum; i++)
+		{
+			targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
+			wthreads[i] = std::shared_ptr<WriteHddThread::WriteHddThread>(new WriteHddThread::WriteHddThread(targetFileName));
+		}
+		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
+			throw "Error in creating task";
+		if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
+			throw "Error in creating AIVoltageChan";
+		if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
+			throw "Error in CfgSampClkTiming";
 		DAQmxBaseStartTask(taskHandle);
 		pointsToRead = samplesPerChan;
 		int j;
@@ -355,7 +363,12 @@ int read()
 			rdata = new float64[bufferSize];
 			boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
 			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize, &pointsRead, NULL);
-			thread.push(ptime, pointsRead, rdata);
+			auto tmp = rdata;
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				wthreads[i]->push(ptime, pointsRead, tmp);
+				tmp += pointsRead;
+			}
 			delete rdata;
 			//dataQueue.push(std::move(*wp));
 			if (readStatus != DO) readTime = 0;
