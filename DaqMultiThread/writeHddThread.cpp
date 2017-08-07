@@ -92,7 +92,7 @@ namespace WriteHddThread
 
 	WriteHddThread::~WriteHddThread()
 	{
-		std::cout << "calling Destructor of WriteHddThread" << std::endl;
+		//std::cout << "calling Destructor of WriteHddThread" << std::endl;
 		_writeCmd = EXIT;
 		_writeThread->join();
 		delete _writeThread;

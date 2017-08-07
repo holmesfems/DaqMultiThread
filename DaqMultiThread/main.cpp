@@ -113,13 +113,15 @@ int32       readSets = 10;
 std::atomic<int32> readTime;//sec,-1 for infinity
 
 //SaveConfig::Config *config;
-ParamSet::ParamHelper *paramHelper;
+ParamSet::ParamHelper *paramHelper = NULL;
+ParamSet::ParamHelper *autoParams = NULL;
 const std::string configFileName = "parameter.conf";
 
 //Mutex
 //std::mutex writeFileMutex;
-std::mutex parameterMutex;
+//std::mutex parameterMutex;
 //std::mutex readDataMutex[2];
+
 //TargetFileName
 std::string targetFileName = "";
 
@@ -130,6 +132,7 @@ CmdHelper::CmdHelper cmdHelper(cmdMap);
 //CheckOnOff
 double_t &checkA = WriteHddThread::checkA;
 double_t &checkB = WriteHddThread::checkB;
+
 //Flags
 std::atomic<int> readStatus;
 const int HOLD = 0;
@@ -138,7 +141,51 @@ const int EXIT = -1;
 
 std::atomic<TcpServer::TcpServer*> tcpServer;
 
+//!Save the parameter in paramHelper to a config file
+int saveConfig()
+{
+	SaveConfig::Config config;
+	for (auto item : paramHelper->bindlist())
+	{
+		switch (item.second.second)
+		{
+		case ParamSet::ParamHelper::INTEGER:
+			config.pushItem(SaveConfig::ConfigItem(item.first, StringTool::convertFrom<int32>(*(int32*)(item.second.first))));
+			break;
+		case ParamSet::ParamHelper::TEXT:
+			config.pushItem(SaveConfig::ConfigItem(item.first, (*(std::string*)(item.second.first))));
+			break;
+		case ParamSet::ParamHelper::FLOAT64:
+			config.pushItem(SaveConfig::ConfigItem(item.first, StringTool::convertFrom<double_t>(*(double_t*)(item.second.first))));
+			break;
+		}
+	}
+	config.save(configFileName);
+}
 
+//!Load parameters from config file to paramHelper
+int loadConfig()
+{
+	SaveConfig::Config config;
+	if (config.load(configFileName) < 0)
+	{
+		//make initial config
+		saveConfig();
+	}
+	else
+	{
+		//Read params from config file
+		ParamSet::Params params;
+		for (auto item : config.getList())
+		{
+			params.push_back(ParamSet::ParamItem(item.key, item.value));
+		}
+		paramHelper->set(params);
+	}
+	return 0;
+}
+
+//Start reading from DAQ device
 std::string startRead(ParamSet::Params &params)
 {
 	readTime = -1;
@@ -146,6 +193,7 @@ std::string startRead(ParamSet::Params &params)
 	filter.push_back("readTime");
 	filter.push_back("sampleRate");
 	filter.push_back("samplesPerChan");
+	filter.push_back("channel");
 	filter.push_back("");
 	ParamSet::Params filtered;
 	for (auto item : params)
@@ -156,12 +204,16 @@ std::string startRead(ParamSet::Params &params)
 		}
 	}
 	//default parameter = "readTime"
-	paramHelper->bind("", &readTime, ParamSet::ParamHelper::INTEGER);
+	autoParams->bind("", &readTime, ParamSet::ParamHelper::INTEGER);
+	loadConfig();
 	paramHelper->set(filtered);
+	autoParams->set(filtered);
+	//Set flag
 	readStatus = DO;
 	return "start reading\n";
 }
 
+//!Stop reading from DAQ device
 std::string stopRead(ParamSet::Params &params)
 {
 	readStatus = HOLD;
@@ -176,52 +228,29 @@ std::string exitRead(ParamSet::Params &params)
 
 int initialize()
 {
-	paramHelper = new ParamSet::ParamHelper();
-	//initializing parameter binder
-	paramHelper->bind("channel", &channel, ParamSet::ParamHelper::TEXT);
-	paramHelper->bind("min", &min, ParamSet::ParamHelper::FLOAT64);
-	paramHelper->bind("max", &max, ParamSet::ParamHelper::FLOAT64);
-	paramHelper->bind("source", &source, ParamSet::ParamHelper::TEXT);
-	paramHelper->bind("samplesPerChan", &samplesPerChan, ParamSet::ParamHelper::INTEGER);
-	paramHelper->bind("sampleRate", &sampleRate, ParamSet::ParamHelper::FLOAT64);
-	paramHelper->bind("bufferSize", &bufferSize, ParamSet::ParamHelper::INTEGER);
-	paramHelper->bind("timeout", &timeout, ParamSet::ParamHelper::FLOAT64);
-	paramHelper->bind("readSets", &readSets, ParamSet::ParamHelper::INTEGER);
-	paramHelper->bind("checkA", &checkA, ParamSet::ParamHelper::FLOAT64);
-	paramHelper->bind("checkB", &checkB, ParamSet::ParamHelper::FLOAT64);
-	paramHelper->bind("tcpPort", &tcpPort, ParamSet::ParamHelper::INTEGER);
-	SaveConfig::Config config;
-	if (config.load(configFileName) < 0)
+	if (!paramHelper)
 	{
-		//make initial config
-		for (auto item : paramHelper->bindlist())
-		{
-			switch (item.second.second)
-			{
-			case ParamSet::ParamHelper::INTEGER:
-				config.pushItem(SaveConfig::ConfigItem(item.first, StringTool::convertFrom<int32>(*(int32*)(item.second.first))));
-				break;
-			case ParamSet::ParamHelper::TEXT:
-				config.pushItem(SaveConfig::ConfigItem(item.first, (*(std::string*)(item.second.first))));
-				break;
-			case ParamSet::ParamHelper::FLOAT64:
-				config.pushItem(SaveConfig::ConfigItem(item.first, StringTool::convertFrom<double_t>(*(double_t*)(item.second.first))));
-				break;
-			}
-		}
-		config.save(configFileName);
+		paramHelper = new ParamSet::ParamHelper();
+		//initializing parameter binder
+		paramHelper->bind("channel", &channel, ParamSet::ParamHelper::TEXT);
+		paramHelper->bind("min", &min, ParamSet::ParamHelper::FLOAT64);
+		paramHelper->bind("max", &max, ParamSet::ParamHelper::FLOAT64);
+		paramHelper->bind("source", &source, ParamSet::ParamHelper::TEXT);
+		paramHelper->bind("samplesPerChan", &samplesPerChan, ParamSet::ParamHelper::INTEGER);
+		paramHelper->bind("sampleRate", &sampleRate, ParamSet::ParamHelper::FLOAT64);
+		paramHelper->bind("bufferSize", &bufferSize, ParamSet::ParamHelper::INTEGER);
+		paramHelper->bind("timeout", &timeout, ParamSet::ParamHelper::FLOAT64);
+		paramHelper->bind("readSets", &readSets, ParamSet::ParamHelper::INTEGER);
+		paramHelper->bind("checkA", &checkA, ParamSet::ParamHelper::FLOAT64);
+		paramHelper->bind("checkB", &checkB, ParamSet::ParamHelper::FLOAT64);
+		paramHelper->bind("tcpPort", &tcpPort, ParamSet::ParamHelper::INTEGER);
 	}
-	else
+	if (!autoParams)
 	{
-		//Read params from config file
-		ParamSet::Params params;
-		for (auto item : config.getList())
-		{
-			params.push_back(ParamSet::ParamItem(item.key, item.value));
-		}
-		paramHelper->set(params);
+		autoParams = new ParamSet::ParamHelper();
+		autoParams->bind("readTime", &readTime, ParamSet::ParamHelper::INTEGER);
 	}
-	paramHelper->bind("readTime", &readTime, ParamSet::ParamHelper::INTEGER);
+	loadConfig();
 	cmdHelper.registCmd("read", &startRead, "start read daq");
 	cmdHelper.registCmd("stop", &stopRead, "stop read daq");
 	cmdHelper.registCmd("exit", &exitRead, "exit read daq");
@@ -231,10 +260,6 @@ int initialize()
 	readStatus = HOLD;
 	return 0;
 }
-
-
-
-
 
 int decode(std::string source, std::string target)
 {
@@ -339,7 +364,7 @@ int read()
 		}
 		if (readStatus == EXIT) break;
 		if (readStatus != DO) break;
-		//writeCmd = HOLD;
+		//Number of writing  HDD thread
 		size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
 		using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
 		std::vector<sharePtr_wthread> wthreads(wthreadNum);
@@ -361,9 +386,9 @@ int read()
 		for (j = 0; j < readTime || readTime < 0; j++)
 		{
 			int32	pointsRead = 0;
-			rdata = new float64[bufferSize];
+			rdata = new float64[bufferSize*wthreadNum];
 			boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
-			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize, &pointsRead, NULL);
+			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
 			auto tmp = rdata;
 			for (int i = 0; i < wthreadNum; i++)
 			{
@@ -449,5 +474,3 @@ int main(int argc, char *argv[])
 	std::cout << "Wrong use\n" << std::endl;
 	return 0;
 }
-
-
