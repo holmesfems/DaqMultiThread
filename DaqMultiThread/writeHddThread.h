@@ -36,7 +36,7 @@ namespace WriteHddThread
 	class WriteHddThread
 	{
 	public:
-		WriteHddThread(std::string &targetFileName);
+		WriteHddThread(std::string &targetFileName,int writeFlag=BIT);
 		~WriteHddThread();
 		void push(WriteParameter& wp);
 		void push(boost::posix_time::ptime &ptime, int32_t dataSize = 0, double_t* data = NULL);
@@ -48,9 +48,11 @@ namespace WriteHddThread
 		std::atomic<int> _writeCmd;
 		std::string _targetFileName;
 		void _threadFunction();
-
+		int _writeFlag;
 	};
 
+	const int BIT = 0x1;
+	const int RAW = 0x10;
 	const int HOLD = 0;
 	const int DO = 1;
 	const int EXIT = -1;

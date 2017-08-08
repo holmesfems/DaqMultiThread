@@ -80,10 +80,16 @@ namespace WriteHddThread
 		return 0;
 	}
 
+	int writeRaw(std::ofstream &ofs, WriteParameter &wp)
+	{
+		ofs.write((char*)wp.data.data(), sizeof(double_t)*wp.dataSize);
+		return 0;
+	}
 
 
-	WriteHddThread::WriteHddThread(std::string &targetFileName):
-		_targetFileName(targetFileName)
+	WriteHddThread::WriteHddThread(std::string &targetFileName,int writeFlag):
+		_targetFileName(targetFileName),
+		_writeFlag(writeFlag)
 	{
 		_writeCmd = HOLD;
 		_writeThread = new std::thread(std::bind(&WriteHddThread::_threadFunction, this));
@@ -111,19 +117,29 @@ namespace WriteHddThread
 
 	void  WriteHddThread::_threadFunction()
 	{
-		std::ofstream ofs;
-		ofs.open(_targetFileName, std::ios::binary | std::ios::app);
+		std::ofstream ofs_bit;
+		if (_writeFlag & BIT)
+			ofs_bit.open(_targetFileName, std::ios::binary | std::ios::app);
+		std::ofstream ofs_raw;
+		if (_writeFlag & RAW)
+			ofs_raw.open(_targetFileName + ".raw", std::ios::binary | std::ios::app);
 		while (true)
 		{
 			if (_writeCmd == EXIT && _dataQueue.size() == 0) break;
 			if (_dataQueue.size() > 0)
 			{
-				writeEncode(ofs, _dataQueue.front());
+				if (_writeFlag & BIT)
+					writeEncode(ofs_bit, _dataQueue.front());
+				if (_writeFlag & RAW)
+					writeRaw(ofs_raw, _dataQueue.front());
 				_dataQueue.pop();
 			}
 			else
 				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
-		ofs.close();
+		if (ofs_bit.is_open())
+			ofs_bit.close();
+		if (ofs_raw.is_open())
+			ofs_raw.close();
 	}
 }

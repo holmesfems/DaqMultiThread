@@ -322,6 +322,27 @@ int decode(std::string source, std::string target)
 	return 0;
 }
 
+int decode_raw(std::string source, std::string target)
+{
+	std::ofstream ofs;
+	std::ifstream ifs;
+	ifs.open(source, std::ios::binary);
+	ofs.open(target);
+	int count = 0;
+	double_t *buffer = new double_t[bufferSize];
+	while (!ifs.eof())
+	{
+		
+		ifs.read((char*)buffer, bufferSize * sizeof(double_t));
+		for (int i = 0; i < ifs.gcount(); i++)
+		{
+			ofs << count << "\t" << buffer[i] << std::endl;
+		}
+	}
+	delete[] buffer;
+	return 0;
+}
+
 void tcpThread()
 {
 	while (true)
