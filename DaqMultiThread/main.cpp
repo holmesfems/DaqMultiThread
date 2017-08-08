@@ -163,6 +163,7 @@ int saveConfig()
 		}
 	}
 	config.save(configFileName);
+	return 0;
 }
 
 //!Load parameters from config file to paramHelper
