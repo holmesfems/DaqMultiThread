@@ -334,7 +334,7 @@ int decode_raw(std::string source, std::string target)
 	{
 		
 		ifs.read((char*)buffer, bufferSize * sizeof(double_t));
-		for (int i = 0; i < ifs.gcount(); i++)
+		for (int i = 0; i < ifs.gcount() / sizeof(double_t); i++)
 		{
 			ofs << count << "\t" << buffer[i] << std::endl;
 		}
@@ -484,6 +484,16 @@ int main(int argc, char *argv[])
 			std::string source = argv[2];
 			std::string target = argv[3];
 			decode(source, target);
+			return 0;
+		}
+	}
+	else if (cmd == "-dr")
+	{
+		if (argc == 4)
+		{
+			std::string source = argv[2];
+			std::string target = argv[3];
+			decode_raw(source, target);
 			return 0;
 		}
 	}
