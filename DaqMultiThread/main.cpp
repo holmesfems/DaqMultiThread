@@ -141,6 +141,8 @@ const int EXIT = -1;
 
 std::atomic<TcpServer::TcpServer*> tcpServer;
 
+std::string saveMode = "BIT";
+
 //!Save the parameter in paramHelper to a config file
 int saveConfig()
 {
@@ -195,6 +197,7 @@ std::string startRead(ParamSet::Params &params)
 	filter.push_back("samplesPerChan");
 	filter.push_back("channel");
 	filter.push_back("");
+	filter.push_back("saveMode");
 	ParamSet::Params filtered;
 	for (auto item : params)
 	{
@@ -205,6 +208,7 @@ std::string startRead(ParamSet::Params &params)
 	}
 	//default parameter = "readTime"
 	autoParams->bind("", &readTime, ParamSet::ParamHelper::INTEGER);
+	saveMode = "BIT";
 	loadConfig();
 	paramHelper->set(filtered);
 	autoParams->set(filtered);
@@ -249,6 +253,7 @@ int initialize()
 	{
 		autoParams = new ParamSet::ParamHelper();
 		autoParams->bind("readTime", &readTime, ParamSet::ParamHelper::INTEGER);
+		autoParams->bind("saveMode", &saveMode, ParamSet::ParamHelper::TEXT);
 	}
 	loadConfig();
 	cmdHelper.registCmd("read", &startRead, "start read daq");
@@ -389,10 +394,13 @@ int read()
 		size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
 		using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
 		std::vector<sharePtr_wthread> wthreads(wthreadNum);
+		int32_t writeFlag;
+		if (saveMode == "BIT") writeFlag = WriteHddThread::BIT;
+		else if (saveMode == "RAW") writeFlag = WriteHddThread::RAW;
 		for (int i = 0; i < wthreadNum; i++)
 		{
 			targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
-			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName));
+			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag));
 		}
 		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
 			throw "Error in creating task";
