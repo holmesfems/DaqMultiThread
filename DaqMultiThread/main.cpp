@@ -343,6 +343,7 @@ int decode_raw(std::string source, std::string target)
 		for (int i = 0; i < ifs.gcount() / sizeof(double_t); i++)
 		{
 			ofs << count << "\t" << buffer[i] << std::endl;
+			count++;
 		}
 	}
 	delete[] buffer;
@@ -495,6 +496,13 @@ int main(int argc, char *argv[])
 			decode(source, target);
 			return 0;
 		}
+		else if (argc == 3)
+		{
+			std::string source = argv[2];
+			std::string target = source + ".out";
+			decode(source, target);
+			return 0;
+		}
 	}
 	else if (cmd == "-dr")
 	{
@@ -502,6 +510,13 @@ int main(int argc, char *argv[])
 		{
 			std::string source = argv[2];
 			std::string target = argv[3];
+			decode_raw(source, target);
+			return 0;
+		}
+		else if (argc == 3)
+		{
+			std::string source = argv[2];
+			std::string target = source + ".out";
 			decode_raw(source, target);
 			return 0;
 		}
