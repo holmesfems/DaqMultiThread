@@ -379,7 +379,7 @@ int timeDiff(std::string source, std::string target)
 		}
 		else
 		{
-			ofs << (header.ptime - ptime).total_seconds() << std::endl;
+			ofs << (header.ptime - ptime).total_microseconds()/1000000.0 << std::endl;
 			ptime = header.ptime;
 		}
 		int32 *buffer = new int32[header.bodySize];
