@@ -371,10 +371,11 @@ int timeDiff(std::string source, std::string target)
 		ifs.read((char*)&header, sizeof(Header));
 		if (ifs.eof())
 			break;
-		ofs << "#" << boost::posix_time::to_iso_extended_string(header.ptime) << std::endl;
+		//ofs << "#" << boost::posix_time::to_iso_extended_string(header.ptime) << std::endl;
 		if (first)
 		{
 			ptime = header.ptime;
+			first = false;
 		}
 		else
 		{
@@ -398,7 +399,7 @@ int timeDiff(std::string source, std::string target)
 	}
 	int8 value = status ? 1 : 0;
 	position--;
-	ofs << position << "\t" << int32(value) << std::endl;
+	//ofs << position << "\t" << int32(value) << std::endl;
 	ifs.close();
 	ofs.close();
 	//writeFileMutex.unlock();
