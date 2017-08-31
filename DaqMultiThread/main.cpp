@@ -350,6 +350,61 @@ int decode_raw(std::string source, std::string target)
 	return 0;
 }
 
+int timeDiff(std::string source, std::string target)
+{
+	//using DataPoint = std::pair < int32, int32 >;
+	//std::vector<DataPoint> result;
+	std::ofstream ofs;
+	std::ifstream ifs;
+	//writeFileMutex.lock();
+	ifs.open(source, std::ios::binary);
+	ofs.open(target);
+	bool first = true;
+	int32 position = 0;
+	bool status;
+	boost::posix_time::ptime ptime;
+	while (!ifs.eof())
+	{
+		//header
+		using Header = WriteHddThread::Header;
+		Header header;
+		ifs.read((char*)&header, sizeof(Header));
+		if (ifs.eof())
+			break;
+		ofs << "#" << boost::posix_time::to_iso_extended_string(header.ptime) << std::endl;
+		if (first)
+		{
+			ptime = header.ptime;
+		}
+		else
+		{
+			ofs << (header.ptime - ptime).total_seconds << std::endl;
+			ptime = header.ptime;
+		}
+		int32 *buffer = new int32[header.bodySize];
+		ifs.read((char*)buffer, sizeof(int32)*header.bodySize);
+		int i;
+		for (i = 0; i < header.bodySize - 1; i++)
+		{
+			position += buffer[i];
+			int8 value = status ? 1 : 0;
+			//ofs << position - 1 << "\t" << int32(value) << std::endl;
+			//ofs << position << "\t" << 1 - value << std::endl;
+			status = !status;
+		}
+		position += buffer[i];
+		std::cout << "position:" << position << std::endl;
+		delete buffer;
+	}
+	int8 value = status ? 1 : 0;
+	position--;
+	ofs << position << "\t" << int32(value) << std::endl;
+	ifs.close();
+	ofs.close();
+	//writeFileMutex.unlock();
+	return 0;
+}
+
 void tcpThread()
 {
 	while (true)
@@ -489,6 +544,7 @@ int main(int argc, char *argv[])
 	std::string cmd = argv[1];
 	if (cmd == "-d")
 	{
+		/*
 		if (argc == 4)
 		{
 			std::string source = argv[2];
@@ -496,28 +552,41 @@ int main(int argc, char *argv[])
 			decode(source, target);
 			return 0;
 		}
-		else if (argc == 3)
+		*/
+		if (argc >= 3)
 		{
-			std::string source = argv[2];
-			std::string target = source + ".out";
-			decode(source, target);
+			for (int i = 2; i < argc; i++)
+			{
+				std::string source = argv[i];
+				std::string target = source + ".out";
+				decode(source, target);
+			}
 			return 0;
 		}
 	}
 	else if (cmd == "-dr")
 	{
-		if (argc == 4)
+		if (argc >= 3)
 		{
-			std::string source = argv[2];
-			std::string target = argv[3];
-			decode_raw(source, target);
+			for (int i = 2; i < argc; i++)
+			{
+				std::string source = argv[i];
+				std::string target = source + ".out";
+				decode_raw(source, target);
+			}
 			return 0;
 		}
-		else if (argc == 3)
+	}
+	else if (cmd == "-dt")
+	{
+		if (argc >= 3)
 		{
-			std::string source = argv[2];
-			std::string target = source + ".out";
-			decode_raw(source, target);
+			for (int i = 2; i < argc; i++)
+			{
+				std::string source = argv[i];
+				std::string target = source + ".tdiff";
+				timeDiff(source, target);
+			}
 			return 0;
 		}
 	}
