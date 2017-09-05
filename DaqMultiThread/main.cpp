@@ -500,7 +500,7 @@ int read()
 						readStatus = HOLD;
 						continue;
 					}
-					if (writeFlag[i] & getFlag == 0)
+					if ((writeFlag[i] & getFlag) == 0)
 					{
 						writeFlag[i] += getFlag;
 					}
