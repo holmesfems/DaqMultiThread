@@ -371,31 +371,31 @@ int timeDiff(std::string source, std::string target)
 		ifs.read((char*)&header, sizeof(Header));
 		if (ifs.eof())
 			break;
-		//ofs << "#" << boost::posix_time::to_iso_extended_string(header.ptime) << std::endl;
-		if (first)
-		{
-			ptime = header.ptime;
-			first = false;
-		}
-		else
-		{
-			ofs << (header.ptime - ptime).total_microseconds()/1000000.0 << std::endl;
-			ptime = header.ptime;
-		}
-		int32 *buffer = new int32[header.bodySize];
-		ifs.read((char*)buffer, sizeof(int32)*header.bodySize);
-		int i;
-		for (i = 0; i < header.bodySize - 1; i++)
-		{
-			position += buffer[i];
-			int8 value = status ? 1 : 0;
-			//ofs << position - 1 << "\t" << int32(value) << std::endl;
-			//ofs << position << "\t" << 1 - value << std::endl;
-			status = !status;
-		}
-		position += buffer[i];
-		std::cout << "position:" << position << std::endl;
-		delete buffer;
+//ofs << "#" << boost::posix_time::to_iso_extended_string(header.ptime) << std::endl;
+if (first)
+{
+	ptime = header.ptime;
+	first = false;
+}
+else
+{
+	ofs << (header.ptime - ptime).total_microseconds() / 1000000.0 << std::endl;
+	ptime = header.ptime;
+}
+int32 *buffer = new int32[header.bodySize];
+ifs.read((char*)buffer, sizeof(int32)*header.bodySize);
+int i;
+for (i = 0; i < header.bodySize - 1; i++)
+{
+	position += buffer[i];
+	int8 value = status ? 1 : 0;
+	//ofs << position - 1 << "\t" << int32(value) << std::endl;
+	//ofs << position << "\t" << 1 - value << std::endl;
+	status = !status;
+}
+position += buffer[i];
+std::cout << "position:" << position << std::endl;
+delete buffer;
 	}
 	int8 value = status ? 1 : 0;
 	position--;
@@ -452,13 +452,71 @@ int read()
 		size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
 		using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
 		std::vector<sharePtr_wthread> wthreads(wthreadNum);
-		int32_t writeFlag;
-		if (saveMode == "BIT") writeFlag = WriteHddThread::BIT;
-		else if (saveMode == "RAW") writeFlag = WriteHddThread::RAW;
+		std::vector<int32_t> writeFlag(wthreadNum);
+		if (saveMode == "BIT")
+		{
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				writeFlag[i] = WriteHddThread::BIT;
+			}
+		}
+		else if (saveMode == "RAW")
+		{
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				writeFlag[i] = WriteHddThread::RAW;
+			}
+		}
+		else
+		{
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				writeFlag[i] = 0;
+			}
+			std::vector<std::string> delim = StringTool::strSplit(saveMode, ",");
+			if (delim.size() != wthreadNum)
+			{
+				output("Wrong use of saveMode!");
+				readStatus = HOLD;
+				continue;
+			}
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				int32_t getFlag = 0;
+				std::vector<std::string> delim2 = StringTool::strSplit(delim[i], "|");
+				for (auto item : delim2)
+				{
+					if (item == "RAW")
+					{
+						getFlag = WriteHddThread::RAW;
+					}
+					else if (item == "BIT")
+					{
+						getFlag = WriteHddThread::BIT;
+					}
+					else
+					{
+						output("Wrong use of saveMode!");
+						readStatus = HOLD;
+						continue;
+					}
+					if (writeFlag[i] & getFlag == 0)
+					{
+						writeFlag[i] += getFlag;
+					}
+					else
+					{
+						output("Wrong use of saveMode!");
+						readStatus = HOLD;
+						continue;
+					}
+				}
+			}
+		}
 		for (int i = 0; i < wthreadNum; i++)
 		{
 			targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
-			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag));
+			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
 		}
 		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
 			throw "Error in creating task";
