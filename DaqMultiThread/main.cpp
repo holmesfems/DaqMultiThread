@@ -568,12 +568,12 @@ int read()
 	return 0;
 }
 
-int makeClient()
+int makeClient(std::string ip, uint16_t port)
 {
 	std::string msg;
 	boost::asio::io_service io_service;
 	TcpClient::TcpClient client(io_service);
-	client.connect("127.0.0.1", tcpPort);
+	client.connect(ip, port);
 	std::thread thread
 	(
 		[&io_service]()
@@ -651,7 +651,15 @@ int main(int argc, char *argv[])
 	}
 	else if (cmd == "-c")
 	{
-		makeClient();
+        std::string ip="127.0.0.1";
+        uint16_t port=tcpPort;
+        if (argc >= 3)
+        {
+            ip = argv[2];
+            if(argc >=4)
+                port=std::stoi(argv[3]);
+        }
+		makeClient(ip,port);
 		return 0;
 	}
 	std::cout << "Wrong use\n" << std::endl;
