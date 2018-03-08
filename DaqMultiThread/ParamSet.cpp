@@ -48,12 +48,9 @@ namespace ParamSet
 		}
 	}
 
-	ParamItem strToItem(const std::string &equation)
+	ParamItem strToItem(const std::string &equation, char _escape, char _equal)
 	{
-		const char _escape = '\\';
 		// static const char _strBracket='"';
-		const char _devide = ' ';
-		const char _equal = '=';
 		std::string trimCmd = StringTool::strTrim(equation);
 		// bool first = true;
 		// bool inStr=false;
@@ -64,7 +61,7 @@ namespace ParamSet
 		const char *data = trimCmd.c_str();
 		size_t i, maxi = trimCmd.length();
 		std::ostringstream oss;
-		std::string key, value;
+		std::string key = "" , value;
 		// std::string cmd;
 		//Params ret;
 		for (i = 0; i < maxi; i++) {
@@ -103,9 +100,6 @@ namespace ParamSet
 				// inEsc = false;
 				continue;
 			}
-			if (data[i] == _devide) {
-				break;
-			}
 			if (data[i] == _equal) {
 				//assert(!(i == maxi - 1));
 				if (!inEqual) {
@@ -135,9 +129,9 @@ namespace ParamSet
 		return ParamItem(key, value);
 	}
 
-	ParamItem strToItem(const char *equation)
+	ParamItem strToItem(const char *equation, char _escape, char _equal)
 	{
 		std::string strequ = std::string(equation);
-		return strToItem(strequ);
+		return strToItem(strequ,_escape,_equal);
 	}
 }

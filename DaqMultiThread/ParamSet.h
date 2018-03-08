@@ -44,10 +44,10 @@ namespace ParamSet
 	};
 
 	//! Change a equation string to the ParamItem
-	ParamItem strToItem(const std::string &equation);
+	ParamItem strToItem(const std::string &equation, char escape = '\\', char equal = '=');
 
 	//! Change a equation string to the ParamItem
-	ParamItem strToItem(const char *equation);
+	ParamItem strToItem(const char *equation, char escape = '\\', char equal = '=');
 
 }
 #endif

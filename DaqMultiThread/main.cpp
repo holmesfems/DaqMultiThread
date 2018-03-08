@@ -371,31 +371,31 @@ int timeDiff(std::string source, std::string target)
 		ifs.read((char*)&header, sizeof(Header));
 		if (ifs.eof())
 			break;
-//ofs << "#" << boost::posix_time::to_iso_extended_string(header.ptime) << std::endl;
-if (first)
-{
-	ptime = header.ptime;
-	first = false;
-}
-else
-{
-	ofs << (header.ptime - ptime).total_microseconds() / 1000000.0 << std::endl;
-	ptime = header.ptime;
-}
-int32 *buffer = new int32[header.bodySize];
-ifs.read((char*)buffer, sizeof(int32)*header.bodySize);
-int i;
-for (i = 0; i < header.bodySize - 1; i++)
-{
-	position += buffer[i];
-	int8 value = status ? 1 : 0;
-	//ofs << position - 1 << "\t" << int32(value) << std::endl;
-	//ofs << position << "\t" << 1 - value << std::endl;
-	status = !status;
-}
-position += buffer[i];
-std::cout << "position:" << position << std::endl;
-delete buffer;
+    //ofs << "#" << boost::posix_time::to_iso_extended_string(header.ptime) << std::endl;
+        if (first)
+        {
+	        ptime = header.ptime;
+	        first = false;
+        }
+        else
+        {
+	        ofs << (header.ptime - ptime).total_microseconds() / 1000000.0 << std::endl;
+	        ptime = header.ptime;
+        }
+        int32 *buffer = new int32[header.bodySize];
+        ifs.read((char*)buffer, sizeof(int32)*header.bodySize);
+        int i;
+        for (i = 0; i < header.bodySize - 1; i++)
+        {
+	        position += buffer[i];
+	        int8 value = status ? 1 : 0;
+	        //ofs << position - 1 << "\t" << int32(value) << std::endl;
+	        //ofs << position << "\t" << 1 - value << std::endl;
+	        status = !status;
+        }
+        position += buffer[i];
+        std::cout << "position:" << position << std::endl;
+        delete buffer;
 	}
 	int8 value = status ? 1 : 0;
 	position--;

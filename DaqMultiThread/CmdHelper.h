@@ -56,9 +56,9 @@ namespace CmdHelper
 	private:
 		//! Convert a string to command
 		static CmdSend _str_to_cmd(const std::string &str);
+		static const char _devide = ' ';
 		static const char _escape = '\\';
 		// static const char _strBracket='"';
-		static const char _devide = ' ';
 		static const char _equal = '=';
 		CmdMap &_cmdMap;
 
