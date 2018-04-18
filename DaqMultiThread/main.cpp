@@ -62,25 +62,24 @@
 #include <queue>
 #include <vector>
 #include <algorithm>
+#include <sstream>
 //#include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
 #include <fstream>
-#include "saveConfig.h"
 #include "ParamSet.h"
 #include "stringTool.h"
 #include "CmdHelper.h"
 #include "tcpServer.h"
 #include "tcpClient.h"
 #include "writeHddThread.h"
+#include "json.hpp"
 
 #define DAQmxErrChk(functionCall) { if( DAQmxFailed(error=(functionCall)) ) { goto Error; } 
 //ParamFilter
 using Filter = std::vector<std::string>;
 
 //Default parameters
-//Tcp parameters
-uint16_t tcpPort = 23333;
 
 //Task parameters
 int32       error = 0;
@@ -116,6 +115,7 @@ std::atomic<int32> readTime;//sec,-1 for infinity
 ParamSet::ParamHelper *paramHelper = NULL;
 ParamSet::ParamHelper *autoParams = NULL;
 const std::string configFileName = "parameter.conf";
+nlohmann::json configJson;
 
 //Mutex
 //std::mutex writeFileMutex;
@@ -139,52 +139,95 @@ const int HOLD = 0;
 const int DO = 1;
 const int EXIT = -1;
 
+bool use_TCP = false;
+
+//ip config
+std::string ip_host = "127.0.0.1";
+//Tcp parameters
+uint16_t tcpPort = 23333;
+
 std::atomic<TcpServer::TcpServer*> tcpServer;
+
 
 std::string saveMode = "BIT";
 
 //!Save the parameter in paramHelper to a config file
 int saveConfig()
 {
-	SaveConfig::Config config;
 	for (auto item : paramHelper->bindlist())
 	{
 		switch (item.second.second)
 		{
 		case ParamSet::ParamHelper::INTEGER:
-			config.pushItem(SaveConfig::ConfigItem(item.first, StringTool::convertFrom<int32>(*(int32*)(item.second.first))));
+			configJson[item.first] = *((int*)item.second.first);
 			break;
 		case ParamSet::ParamHelper::TEXT:
-			config.pushItem(SaveConfig::ConfigItem(item.first, (*(std::string*)(item.second.first))));
+			configJson[item.first] = *((std::string*)item.second.first);
 			break;
 		case ParamSet::ParamHelper::FLOAT64:
-			config.pushItem(SaveConfig::ConfigItem(item.first, StringTool::convertFrom<double_t>(*(double_t*)(item.second.first))));
+			configJson[item.first] = *((double*)item.second.first);
 			break;
 		}
 	}
-	config.save(configFileName);
+	std::ofstream ofs(configFileName);
+	if (ofs.is_open())
+	{
+		ofs << configJson.dump(4);
+		std::cout << "Save config succeed!" << std::endl;
+	}
+	else
+	{
+		std::cout << "Can't open file:" << configFileName << std::endl;
+	}
+	ofs.close();
 	return 0;
 }
 
 //!Load parameters from config file to paramHelper
 int loadConfig()
 {
-	SaveConfig::Config config;
-	if (config.load(configFileName) < 0)
-	{
-		//make initial config
-		saveConfig();
+	std::ifstream ifs(configFileName);
+
+	if (ifs.is_open())
+	{ //file exists
+		try
+		{
+			std::cout << "Read Configuation file succeed!" << std::endl;
+			configJson.clear();
+			ifs >> configJson;
+			ParamSet::VariableBind bind = paramHelper->bindlist();
+			for (auto &item : configJson.items())
+			{
+				if (bind.find(item.key()) == bind.cend())
+				{
+					std::cout << "Error occured: key \"" << item.key() << "\" is not valid" << std::endl;
+					continue;
+				}
+				ParamSet::VariableBindItem binditem = bind[item.key()];
+				switch (binditem.second)
+				{
+				case ParamSet::ParamHelper::INTEGER:
+					*((int*)binditem.first) = configJson[item.key()].get<int>();
+					break;
+				case ParamSet::ParamHelper::TEXT:
+					*((std::string*)binditem.first) = configJson[item.key()].get<std::string>();
+					break;
+				case ParamSet::ParamHelper::FLOAT64:
+					*((double*)binditem.first) = configJson[item.key()].get<double>();
+					break;
+				}
+			}
+		}
+		catch(std::exception e)
+		{
+			std::cout << "Error occured while reading config file:" << e.what() << std::endl;
+		}
 	}
 	else
-	{
-		//Read params from config file
-		ParamSet::Params params;
-		for (auto item : config.getList())
-		{
-			params.push_back(ParamSet::ParamItem(item.key, item.value));
-		}
-		paramHelper->set(params);
+	{ //file not exists
+		saveConfig();
 	}
+	ifs.close();
 	return 0;
 }
 
@@ -209,7 +252,6 @@ std::string startRead(ParamSet::Params &params)
 	}
 	//default parameter = "readTime"
 	autoParams->bind("", &readTime, ParamSet::ParamHelper::INTEGER);
-	saveMode = "BIT";
 	loadConfig();
 	paramHelper->set(filtered);
 	autoParams->set(filtered);
@@ -249,6 +291,7 @@ int initialize()
 		paramHelper->bind("checkA", &checkA, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("checkB", &checkB, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("tcpPort", &tcpPort, ParamSet::ParamHelper::INTEGER);
+		paramHelper->bind("ip_host", &ip_host, ParamSet::ParamHelper::TEXT);
 	}
 	if (!autoParams)
 	{
@@ -410,8 +453,9 @@ void tcpThread()
 {
 	while (true)
 	{
+		use_TCP = true;
 		boost::asio::io_service io_service;
-		TcpServer::TcpServer server(io_service, tcpPort, cmdHelper, &std::cout);
+		TcpServer::TcpServer server(io_service, tcpPort, &std::cout);
 		tcpServer = &server;
 		server.start_accept();
 		io_service.run();
@@ -419,6 +463,7 @@ void tcpThread()
 		tcpServer = NULL;
 		if (server.status == TcpServer::TcpServer::EXIT) break;
 	}
+	use_TCP = false;
 }
 
 int output(std::string msg)
@@ -428,7 +473,7 @@ int output(std::string msg)
 	TcpServer::TcpServer *server = tcpServer;
 	if (server)
 	{
-		if (server->status == TcpServer::TcpServer::ONLINE)
+		if (server->is_connected(0))
 			server->send(msg);
 	}
 	return 0;
@@ -436,127 +481,114 @@ int output(std::string msg)
 
 int read()
 {
-	initialize();
-	float64 *rdata;
-	std::thread _tcpThread(tcpThread);
-	while (true)
+	//Number of writing  HDD thread
+	size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
+	using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
+	std::vector<sharePtr_wthread> wthreads(wthreadNum);
+	std::vector<int32_t> writeFlag(wthreadNum);
+	if (saveMode == "BIT")
 	{
-		if (readStatus == HOLD)
+		for (int i = 0; i < wthreadNum; i++)
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-			continue;
+			writeFlag[i] = WriteHddThread::BIT;
 		}
-		if (readStatus == EXIT) break;
-		if (readStatus != DO) break;
-		//Number of writing  HDD thread
-		size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
-		using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
-		std::vector<sharePtr_wthread> wthreads(wthreadNum);
-		std::vector<int32_t> writeFlag(wthreadNum);
-		if (saveMode == "BIT")
+	}
+	else if (saveMode == "RAW")
+	{
+		for (int i = 0; i < wthreadNum; i++)
 		{
-			for (int i = 0; i < wthreadNum; i++)
-			{
-				writeFlag[i] = WriteHddThread::BIT;
-			}
+			writeFlag[i] = WriteHddThread::RAW;
 		}
-		else if (saveMode == "RAW")
+	}
+	else
+	{
+		for (int i = 0; i < wthreadNum; i++)
 		{
-			for (int i = 0; i < wthreadNum; i++)
-			{
-				writeFlag[i] = WriteHddThread::RAW;
-			}
+			writeFlag[i] = 0;
 		}
-		else
+		std::vector<std::string> delim = StringTool::strSplit(saveMode, ",");
+		if (delim.size() != wthreadNum)
 		{
-			for (int i = 0; i < wthreadNum; i++)
-			{
-				writeFlag[i] = 0;
-			}
-			std::vector<std::string> delim = StringTool::strSplit(saveMode, ",");
-			if (delim.size() != wthreadNum)
-			{
-				output("Wrong use of saveMode!");
-				readStatus = HOLD;
-				continue;
-			}
-			for (int i = 0; i < wthreadNum; i++)
-			{
-				int32_t getFlag = 0;
-				std::vector<std::string> delim2 = StringTool::strSplit(delim[i], "|");
-				for (auto item : delim2)
-				{
-					if (item == "RAW")
-					{
-						getFlag = WriteHddThread::RAW;
-					}
-					else if (item == "BIT")
-					{
-						getFlag = WriteHddThread::BIT;
-					}
-					else
-					{
-						output("Wrong use of saveMode!");
-						readStatus = HOLD;
-						continue;
-					}
-					if ((writeFlag[i] & getFlag) == 0)
-					{
-						writeFlag[i] += getFlag;
-					}
-					else
-					{
-						output("Wrong use of saveMode!");
-						readStatus = HOLD;
-						continue;
-					}
-				}
-			}
+			output("Wrong use of saveMode!");
+			return -1;
 		}
 		for (int i = 0; i < wthreadNum; i++)
 		{
-			targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
-			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
-		}
-		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
-			throw "Error in creating task";
-		if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
-			throw "Error in creating AIVoltageChan";
-		if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
-			throw "Error in CfgSampClkTiming";
-		DAQmxBaseStartTask(taskHandle);
-		pointsToRead = samplesPerChan;
-		int j;
-		output((boost::format("start reading, readTime = %d") % readTime).str());
-		for (j = 0; j < readTime || readTime < 0; j++)
-		{
-			int32	pointsRead = 0;
-			rdata = new float64[bufferSize*wthreadNum];
-			boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
-			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
-			auto tmp = rdata;
-			for (int i = 0; i < wthreadNum; i++)
+			int32_t getFlag = 0;
+			std::vector<std::string> delim2 = StringTool::strSplit(delim[i], "|");
+			for (auto item : delim2)
 			{
-				wthreads[i]->push(ptime, pointsRead, tmp);
-				tmp += pointsRead;
+				if (item == "RAW")
+				{
+					getFlag = WriteHddThread::RAW;
+				}
+				else if (item == "BIT")
+				{
+					getFlag = WriteHddThread::BIT;
+				}
+				else
+				{
+					output("Wrong use of saveMode!");
+					readStatus = HOLD;
+					continue;
+				}
+				if ((writeFlag[i] & getFlag) == 0)
+				{
+					writeFlag[i] += getFlag;
+				}
+				else
+				{
+					output("Wrong use of saveMode!");
+					readStatus = HOLD;
+					continue;
+				}
 			}
-			delete rdata;
-			//dataQueue.push(std::move(*wp));
-			if (readStatus != DO) readTime = 0;
 		}
-		//writeCmd = EXIT;
-		readStatus = HOLD;
-		if (taskHandle != 0)
-		{
-			DAQmxBaseStopTask(taskHandle);
-			DAQmxBaseClearTask(taskHandle);
-			taskHandle = 0;
-		}
-		//_writeThread.join();
-		output((boost::format("stop reading, total read for: %d seconds") % j).str());
 	}
+	for (int i = 0; i < wthreadNum; i++)
+	{
+		targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
+		wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
+	}
+	if (DAQmxBaseCreateTask("", &taskHandle) < 0)
+		throw "Error in creating task";
+	if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
+		throw "Error in creating AIVoltageChan";
+	if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
+		throw "Error in CfgSampClkTiming";
+	DAQmxBaseStartTask(taskHandle);
+	pointsToRead = samplesPerChan;
+	int j;
+	output((boost::format("start reading, readTime = %d") % readTime).str());
+	for (j = 0; j < readTime || readTime < 0; j++)
+	{
+		int32	pointsRead = 0;
+		rdata = new float64[bufferSize*wthreadNum];
+		boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
+		DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
+		auto tmp = rdata;
+		for (int i = 0; i < wthreadNum; i++)
+		{
+			wthreads[i]->push(ptime, pointsRead, tmp);
+			tmp += pointsRead;
+		}
+		delete rdata;
+		//dataQueue.push(std::move(*wp));
+		if (readStatus != DO) readTime = 0;
+	}
+	//writeCmd = EXIT;
+
+	readStatus = HOLD;
+	if (taskHandle != 0)
+	{
+		DAQmxBaseStopTask(taskHandle);
+		DAQmxBaseClearTask(taskHandle);
+		taskHandle = 0;
+	}
+	//_writeThread.join();
+	output((boost::format("stop reading, total read for: %d seconds") % j).str());
+
 	std::cout << "exit reading" << std::endl;
-	_tcpThread.join();
 //Error:
 	/*
 	if (DAQmxFailed(error))
@@ -568,9 +600,34 @@ int read()
 	return 0;
 }
 
+void readByTcp()
+{
+	std::string cmd;
+	std::string reply;
+	while (readStatus != EXIT)
+	{
+		TcpServer::TcpServer *server = tcpServer;
+		if (server != NULL)
+		{
+			if (server->is_connected(-1))
+			{
+				cmd = server->waitRecv();
+				if (cmd != TcpServer::TcpServer::EXIT_MSG)
+				{
+					reply = cmdHelper.exec(cmd);
+					output(reply);
+				}
+			}
+		}
+		else
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	}
+}
+
 int makeClient(std::string ip, uint16_t port)
 {
-	std::string msg;
 	boost::asio::io_service io_service;
 	TcpClient::TcpClient client(io_service);
 	client.connect(ip, port);
@@ -584,10 +641,37 @@ int makeClient(std::string ip, uint16_t port)
 	{
 		std::string msg;
 		std::getline(std::cin, msg);
+		if (msg == "clientExit") break;
 		client.send(msg);
 		if (msg == "exit") break;
-		if (msg == "clientExit") break;
 	}
+	client.exit();
+	std::cout << "client exit" << std::endl;
+	thread.join();
+	return 0;
+}
+
+int makeClient_sendCmd(std::string cmd)
+{
+	boost::asio::io_service io_service;
+	TcpClient::TcpClient client(io_service);
+	client.connect(ip_host, tcpPort);
+	std::thread thread
+	(
+		[&io_service]()
+	{
+		io_service.run();
+	});
+	if (client.is_connected())
+	{
+		client.send(cmd);
+		client.lastRecv();
+	}
+	else
+	{
+		std::cout << "Server not alive" << std::endl;
+	}
+	client.exit();
 	std::cout << "client exit" << std::endl;
 	thread.join();
 	return 0;
@@ -597,7 +681,10 @@ int main(int argc, char *argv[])
 {
 	if (argc == 1)
 	{
-		read();
+		initialize();
+		std::thread _tcpThread(tcpThread);
+		readByTcp();
+		_tcpThread.join();
 		return 0;
 	}
 	std::string cmd = argv[1];
@@ -651,15 +738,38 @@ int main(int argc, char *argv[])
 	}
 	else if (cmd == "-c")
 	{
-        std::string ip="127.0.0.1";
-        uint16_t port=tcpPort;
         if (argc >= 3)
         {
-            ip = argv[2];
+            ip_host = argv[2];
             if(argc >=4)
-                port=std::stoi(argv[3]);
+                tcpPort=std::stoi(argv[3]);
         }
-		makeClient(ip,port);
+		makeClient(ip_host,tcpPort);
+		return 0;
+	}
+	else if (cmd == "-e")
+	{
+		initialize();
+		std::ostringstream oss;
+		for (int i = 2; i < argc; i++)
+		{
+			if (i != 2) oss << " ";
+			oss << argv[i];
+		}
+		cmdHelper.exec(oss.str());
+		read();
+		return 0;
+	}
+	else if (cmd == "-ec")
+	{
+		initialize();
+		std::ostringstream oss;
+		for (int i = 2; i < argc; i++)
+		{
+			if (i != 2) oss << " ";
+			oss << argv[i];
+		}
+		makeClient_sendCmd(oss.str());
 		return 0;
 	}
 	std::cout << "Wrong use\n" << std::endl;

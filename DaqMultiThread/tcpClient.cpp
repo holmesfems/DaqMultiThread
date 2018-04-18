@@ -1,5 +1,6 @@
 /*
 * tcpClient.cpp
+* version 180418
 * Created at 2017/06/25
 * Copyright (C) 2017 zhai <holmesfems@gmail.com>
 *
@@ -7,6 +8,10 @@
 */
 
 #include "tcpClient.h"
+#include <thread>
+#include <chrono>
+#include <sstream>
+
 namespace TcpClient
 {
 	TcpClient::TcpClient(boost::asio::io_service & io_service):
@@ -18,6 +23,9 @@ namespace TcpClient
 
 	void TcpClient::connect(std::string ip_address, uint16_t port)
 	{
+		std::promise<int> csw;
+		_connection_status_writer.swap(csw);
+		_connection_status = _connection_status_writer.get_future();
 		_socket.async_connect(
 			boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(ip_address), port),
 			boost::bind(&TcpClient::TcpClient::_on_connect, this, boost::asio::placeholders::error));
@@ -27,19 +35,70 @@ namespace TcpClient
 	{
 		bool is_sending = !_msgQueue.empty();
 		_msgQueue.push(msg);
+		std::promise<std::string> newWriter;
+		_receive_msg_writer.swap(newWriter);
+		_receive_msg = _receive_msg_writer.get_future(); // reset future-promise
 		if(!is_sending)
 			_io.post(boost::bind(&TcpClient::_async_write, this));
+	}
+
+	bool TcpClient::is_connected(int timeout) 
+	{
+		try
+		{
+			if (_connection_status.wait_for(std::chrono::milliseconds(timeout)) == std::future_status::ready)
+			{
+				return (_connection_status.get()) == ONLINE;
+			}
+			else
+			{
+				return false;
+			}
+		}
+		catch (std::future_error e)
+		{
+			return status == ONLINE;
+		}
+	}
+
+	std::string TcpClient::lastRecv(int timeout)
+	{
+
+		if (_receive_msg.wait_for(std::chrono::milliseconds(timeout)) == std::future_status::ready)
+		{
+			try
+			{
+				return _receive_msg.get();
+			}
+			catch (std::future_error e)
+			{
+				std::ostringstream oss;
+				oss << "Future Error:" << e.what();
+				return oss.str();
+			}
+		}
+		else
+		{
+			return "MSG NOT VALID (Timeout)";
+		}
+	}
+
+	void TcpClient::exit()
+	{
+		_io.stop();
 	}
 
 	void TcpClient::_on_connect(const boost::system::error_code & err)
 	{
 		if (err) {
 			std::cout << "connect failed : " << err.message() << std::endl;
+			status = FAIL;
+			_connection_status_writer.set_value(status);
 		}
 		else {
 			std::cout << "connected" << std::endl;
 			status = ONLINE;
-			std::string msg;
+			_connection_status_writer.set_value(status);
 			_async_receive();
 		}
 	}
@@ -63,9 +122,26 @@ namespace TcpClient
 		}
 		else {
 			std::cout << "recieve succeed " << "length = " << bytes_transferred << std::endl;
+			if (bytes_transferred == 0 && err == boost::asio::error::eof)
+			{
+				std::cout << "Connection lost!" << std::endl;
+				status = LOST;
+				return;
+			}
 			std::string data = std::string(boost::asio::buffer_cast<const char*>(_receive_buff.data()), bytes_transferred);
 			data = data.substr(0, data.length() - 1);
 			std::cout << "reply = \"" << data << "\"" << std::endl;
+			try
+			{
+				_receive_msg_writer.set_value(data); //Msg is ready
+			}
+			catch (std::future_error e)
+			{
+				if (e.code() != std::future_errc::promise_already_satisfied)
+				{
+					std::cout << "Promise error occured: " << e.what() << std::endl;
+				}
+			}
 			_receive_buff.consume(_receive_buff.size());
 			_async_receive();
 			//if(status == ONLINE)
@@ -101,6 +177,4 @@ namespace TcpClient
 		}
 		//std::cout << "exit_on_write" << std::endl;
 	}
-
-	
 }

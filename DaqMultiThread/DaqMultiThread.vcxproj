@@ -60,11 +60,13 @@
   <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+    <IncludePath>C:\Users\zhaig\home\linuxtool\cpplibrary\boost_1_66_0;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="CmdHelper.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ParamSet.cpp" />
-    <ClCompile Include="saveConfig.cpp" />
     <ClCompile Include="stringTool.cpp" />
     <ClCompile Include="tcpClient.cpp" />
     <ClCompile Include="tcpServer.cpp" />
@@ -72,10 +74,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CmdHelper.h" />
+    <ClInclude Include="json.hpp" />
     <ClInclude Include="ParamSet.h" />
     <ClInclude Include="stringTool_util.h" />
     <ClInclude Include="stringTool.h" />
-    <ClInclude Include="saveConfig.h" />
     <ClInclude Include="tcpClient.h" />
     <ClInclude Include="tcpServer.h" />
     <ClInclude Include="writeHddThread.h" />
