@@ -562,6 +562,7 @@ int read()
 	output((boost::format("start reading, readTime = %d") % readTime).str());
 	for (j = 0; j < readTime || readTime < 0; j++)
 	{
+		float64 *rdata;
 		int32	pointsRead = 0;
 		rdata = new float64[bufferSize*wthreadNum];
 		boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
