@@ -12,6 +12,7 @@
 namespace TcpServer
 {
 	const std::string TcpServer::EXIT_MSG("EXIT SERVER");
+	const std::string TcpServer::LOST_MSG("LOST CONNECTION");
 
 	TcpServer::TcpServer(boost::asio::io_service &io_service, uint16_t port, std::ostream *os)
 		: _io(io_service),
@@ -84,18 +85,44 @@ namespace TcpServer
 
 	std::string TcpServer::waitRecv()
 	{
+		_refresh_doneFlag();
 		std::promise<std::string> newwriter;
 		_receive_msg_writer.swap(newwriter);
 		_receive_msg = _receive_msg_writer.get_future();
+		std::string ret;
 		try
 		{
-			return _receive_msg.get();
+			ret = _receive_msg.get();
 		}
 		catch (std::future_error e)
 		{
 			std::ostringstream oss;
 			oss << "Future error:" << e.what();
-			return oss.str();
+			_done();
+			ret = oss.str();
+		}
+		_done();
+		return ret;
+	}
+
+	bool TcpServer::waitAllDone(int timeout)
+	{
+		if (timeout < 0 || _doneFlag.wait_for(std::chrono::milliseconds(timeout)) == std::future_status::ready)
+		{
+			try
+			{
+				return _doneFlag.get();
+			}
+			catch (std::future_error e)
+			{
+				std::ostringstream oss;
+				oss << "Future Error:" << e.what();
+				return false;
+			}
+		}
+		else
+		{
+			return false;
 		}
 	}
 
@@ -179,6 +206,20 @@ namespace TcpServer
 					status = LOST;
 					//start_accept();
 				}
+				
+				try
+				{
+					_receive_msg_writer.set_value(LOST_MSG);
+				}
+				catch (std::future_error e)
+				{
+					if (e.code() != std::future_errc::promise_already_satisfied)
+					{
+						*_os << "Future error:";
+						*_os << e.what();
+					}
+				}
+					
 //				_on_offline();
 			}
 			else
@@ -214,6 +255,7 @@ namespace TcpServer
 		if (_msgQueue.empty()) return;
 		std::string msg = _msgQueue.front();
 		_msgQueue.pop();
+		msg = msg + "\n";
 		boost::asio::async_write(
 			_socket,
 			boost::asio::buffer(msg.c_str(), msg.length()),
@@ -232,6 +274,28 @@ namespace TcpServer
 			*_os << "write succeed" << std::endl;
 			if (!_msgQueue.empty())
 				_async_write();
+		}
+	}
+
+	void TcpServer::_refresh_doneFlag()
+	{
+		std::promise<bool> newpromise;
+		_doneFlag_writer.swap(newpromise);
+		_doneFlag = _doneFlag_writer.get_future();
+	}
+
+	void TcpServer::_done()
+	{
+		try
+		{
+			_doneFlag_writer.set_value(true);
+		}
+		catch (std::future_error e)
+		{
+			if (e.code() != std::future_errc::promise_already_satisfied)
+			{
+				*_os << "Promise error occured: " << e.what() << std::endl;
+			}
 		}
 	}
 }

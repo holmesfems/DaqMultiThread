@@ -31,6 +31,7 @@ namespace TcpServer
 		bool is_connected(int timeout = 100);
 		std::string lastRecv(int timeout = 1000);
 		std::string waitRecv();
+		bool waitAllDone(int timeout = 100);
 		void exit();
 		static const int LOST = -1;
 		static const int EXIT = -2;
@@ -39,6 +40,7 @@ namespace TcpServer
 		static const int FAIL = -3;
 
 		static const std::string EXIT_MSG;
+		static const std::string LOST_MSG;
 	private:
 		boost::asio::io_service& _io;
 		boost::asio::ip::tcp::acceptor _acceptor;
@@ -53,6 +55,9 @@ namespace TcpServer
 		std::future<int> _connection_status;
 		std::promise<int> _connection_status_writer;
 
+		std::future<bool> _doneFlag;
+		std::promise<bool> _doneFlag_writer;
+
 		std::queue<std::string> _recvQueue;
 
 		//uint16_t _port;
@@ -62,6 +67,9 @@ namespace TcpServer
 		void _on_receive(const boost::system::error_code &err, size_t bytes_transferred);
 		void _async_write();
 		void _on_write(const boost::system::error_code &err);
+		void _refresh_doneFlag();
+		void _done();
+
 //		void _on_offline();
 //		void _start_listen();
 	};

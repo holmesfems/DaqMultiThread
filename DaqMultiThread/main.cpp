@@ -598,6 +598,10 @@ void tcpThread()
 		server.start_accept();
 		io_service.run();
 		std::cout << "server status = " << server.status << std::endl;
+		if (!server.waitAllDone())
+		{
+			std::cout << "Error occured while waiting done" << std::endl;
+		}
 		tcpServer = NULL;
 		if (server.status == TcpServer::TcpServer::EXIT) break;
 	}
