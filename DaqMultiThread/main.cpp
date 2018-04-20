@@ -429,7 +429,7 @@ int initialize()
 		paramHelper->bind("checkB", &checkB, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("tcpPort", &tcpPort, ParamSet::ParamHelper::INTEGER);
 		paramHelper->bind("ip_host", &ip_host, ParamSet::ParamHelper::TEXT);
-		paramHelper->bind("saveMode"), &saveMode, ParamSet::ParamHelper::TEXT);
+		paramHelper->bind("saveMode", &saveMode, ParamSet::ParamHelper::TEXT);
 	}
 	if (!autoParams)
 	{
