@@ -257,20 +257,22 @@ std::string startRead(ParamSet::Params &params)
 	autoParams->set(filtered);
 	//Set flag
 	readStatus = DO;
-	return "start reading\n";
+	output("Start reading");
+	read();
+	return "Finished reading";
 }
 
 //!Stop reading from DAQ device
 std::string stopRead(ParamSet::Params &params)
 {
 	readStatus = HOLD;
-	return "stop reading\n";
+	return "stop reading";
 }
 
 std::string exitRead(ParamSet::Params &params)
 {
 	readStatus = EXIT;
-	return "exit reading\n";
+	return "exit reading";
 }
 
 int initialize()
