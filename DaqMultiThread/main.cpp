@@ -414,7 +414,7 @@ std::string startRead(ParamSet::Params &params)
 	}
 	catch (std::future_error e)
 	{
-		if (e.code == std::future_errc::promise_already_satisfied)
+		if (e.code() == std::future_errc::promise_already_satisfied)
 		{
 			ret = "Already reading";
 		}
