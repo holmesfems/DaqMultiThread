@@ -1,6 +1,6 @@
 //#pragma once
 /*
-* tcpserver version 180418
+* tcpserver version 180418.rev2
 * tcpServer.h
 * Created at 2017/06/25
 * Copyright (C) 2017 zhai <holmesfems@gmail.com>
@@ -45,7 +45,6 @@ namespace TcpServer
 		boost::asio::ip::tcp::socket _socket;
 		boost::asio::streambuf _receive_buff;
 		std::queue<std::string> _msgQueue;
-		boost::asio::streambuf _receive_buff;
 		std::ostream *_os;
 		uint16_t _port;
 		std::future<std::string> _receive_msg;
