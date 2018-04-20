@@ -651,7 +651,7 @@ void readByTcp()
 			if (server->is_connected(-1))
 			{
 				cmd = server->waitRecv();
-				if (cmd != TcpServer::TcpServer::EXIT_MSG || cmd != TcpServer::TcpServer::LOST_MSG)
+				if (cmd != TcpServer::TcpServer::EXIT_MSG && cmd != TcpServer::TcpServer::LOST_MSG)
 				{
 					reply = cmdHelper.exec(cmd);
 					output(reply);

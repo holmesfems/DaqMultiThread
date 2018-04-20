@@ -27,6 +27,7 @@ namespace TcpServer
 
 	void TcpServer::start_accept()
 	{
+		_connection_status = _connection_status_writer.get_future();
 		_acceptor.async_accept(
 			_socket,
 			boost::bind(&TcpServer::_on_accept, this, boost::asio::placeholders::error));
