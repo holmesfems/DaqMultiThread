@@ -669,7 +669,7 @@ void readByTcp()
 	}
 	catch (std::future_error e)
 	{
-		if (e.code == std::future_errc::promise_already_satisfied)
+		if (e.code() == std::future_errc::promise_already_satisfied)
 		{
 			std::cout << "Now it's reading, please wait for it finishes work" << std::endl;
 		}
