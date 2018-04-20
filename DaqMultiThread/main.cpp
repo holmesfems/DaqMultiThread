@@ -148,6 +148,8 @@ uint16_t tcpPort = 23333;
 
 std::atomic<TcpServer::TcpServer*> tcpServer;
 
+std::future<bool> readStartFlag;
+std::promise<bool> readStartFlag_writer;
 
 std::string saveMode = "BIT";
 
@@ -244,125 +246,137 @@ int output(std::string msg)
 	return 0;
 }
 
-int read()
+int readThread()
 {
 	//Number of writing  HDD thread
-	size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
-	using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
-	std::vector<sharePtr_wthread> wthreads(wthreadNum);
-	std::vector<int32_t> writeFlag(wthreadNum);
-	if (saveMode == "BIT")
+	do
 	{
-		for (int i = 0; i < wthreadNum; i++)
+		//refresh flag
+		if (use_TCP)
 		{
-			writeFlag[i] = WriteHddThread::BIT;
+			std::promise<bool> newpromise;
+			readStartFlag_writer.swap(newpromise);
+			readStartFlag = readStartFlag_writer.get_future();
+			// wait for flag is set
+			if (!readStartFlag.get()) break;
 		}
-	}
-	else if (saveMode == "RAW")
-	{
-		for (int i = 0; i < wthreadNum; i++)
+		size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
+		using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
+		std::vector<sharePtr_wthread> wthreads(wthreadNum);
+		std::vector<int32_t> writeFlag(wthreadNum);
+		if (saveMode == "BIT")
 		{
-			writeFlag[i] = WriteHddThread::RAW;
-		}
-	}
-	else
-	{
-		for (int i = 0; i < wthreadNum; i++)
-		{
-			writeFlag[i] = 0;
-		}
-		std::vector<std::string> delim = StringTool::strSplit(saveMode, ",");
-		if (delim.size() != wthreadNum)
-		{
-			output("Wrong use of saveMode!");
-			return -1;
-		}
-		for (int i = 0; i < wthreadNum; i++)
-		{
-			int32_t getFlag = 0;
-			std::vector<std::string> delim2 = StringTool::strSplit(delim[i], "|");
-			for (auto item : delim2)
+			for (int i = 0; i < wthreadNum; i++)
 			{
-				if (item == "RAW")
+				writeFlag[i] = WriteHddThread::BIT;
+			}
+		}
+		else if (saveMode == "RAW")
+		{
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				writeFlag[i] = WriteHddThread::RAW;
+			}
+		}
+		else
+		{
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				writeFlag[i] = 0;
+			}
+			std::vector<std::string> delim = StringTool::strSplit(saveMode, ",");
+			if (delim.size() != wthreadNum)
+			{
+				output("Wrong use of saveMode!");
+				return -1;
+			}
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				int32_t getFlag = 0;
+				std::vector<std::string> delim2 = StringTool::strSplit(delim[i], "|");
+				for (auto item : delim2)
 				{
-					getFlag = WriteHddThread::RAW;
-				}
-				else if (item == "BIT")
-				{
-					getFlag = WriteHddThread::BIT;
-				}
-				else
-				{
-					output("Wrong use of saveMode!");
-					readStatus = HOLD;
-					continue;
-				}
-				if ((writeFlag[i] & getFlag) == 0)
-				{
-					writeFlag[i] += getFlag;
-				}
-				else
-				{
-					output("Wrong use of saveMode!");
-					readStatus = HOLD;
-					continue;
+					if (item == "RAW")
+					{
+						getFlag = WriteHddThread::RAW;
+					}
+					else if (item == "BIT")
+					{
+						getFlag = WriteHddThread::BIT;
+					}
+					else
+					{
+						output("Wrong use of saveMode!");
+						readStatus = HOLD;
+						continue;
+					}
+					if ((writeFlag[i] & getFlag) == 0)
+					{
+						writeFlag[i] += getFlag;
+					}
+					else
+					{
+						output("Wrong use of saveMode!");
+						readStatus = HOLD;
+						continue;
+					}
 				}
 			}
 		}
-	}
-	for (int i = 0; i < wthreadNum; i++)
-	{
-		targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
-		wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
-	}
-	if (DAQmxBaseCreateTask("", &taskHandle) < 0)
-		throw "Error in creating task";
-	if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
-		throw "Error in creating AIVoltageChan";
-	if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
-		throw "Error in CfgSampClkTiming";
-	DAQmxBaseStartTask(taskHandle);
-	pointsToRead = samplesPerChan;
-	int j;
-	output((boost::format("start reading, readTime = %d") % readTime).str());
-	for (j = 0; j < readTime || readTime < 0; j++)
-	{
-		float64 *rdata;
-		int32	pointsRead = 0;
-		rdata = new float64[bufferSize*wthreadNum];
-		boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
-		DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
-		auto tmp = rdata;
 		for (int i = 0; i < wthreadNum; i++)
 		{
-			wthreads[i]->push(ptime, pointsRead, tmp);
-			tmp += pointsRead;
+			targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
+			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
 		}
-		delete rdata;
-		//dataQueue.push(std::move(*wp));
-		if (readStatus != DO) readTime = 0;
-	}
-	//writeCmd = EXIT;
+		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
+			throw "Error in creating task";
+		if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
+			throw "Error in creating AIVoltageChan";
+		if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
+			throw "Error in CfgSampClkTiming";
+		DAQmxBaseStartTask(taskHandle);
+		pointsToRead = samplesPerChan;
+		int j;
+		output((boost::format("start reading, readTime = %d") % readTime).str());
+		for (j = 0; j < readTime || readTime < 0; j++)
+		{
+			float64 *rdata;
+			int32	pointsRead = 0;
+			rdata = new float64[bufferSize*wthreadNum];
+			boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
+			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
+			auto tmp = rdata;
+			for (int i = 0; i < wthreadNum; i++)
+			{
+				wthreads[i]->push(ptime, pointsRead, tmp);
+				tmp += pointsRead;
+			}
+			delete rdata;
+			//dataQueue.push(std::move(*wp));
+			if (readStatus != DO) readTime = 0;
+		}
+		//writeCmd = EXIT;
 
-	readStatus = HOLD;
-	if (taskHandle != 0)
-	{
-		DAQmxBaseStopTask(taskHandle);
-		DAQmxBaseClearTask(taskHandle);
-		taskHandle = 0;
-	}
-	//_writeThread.join();
-	output((boost::format("stop reading, total read for: %d seconds") % j).str());
+		readStatus = HOLD;
+		if (taskHandle != 0)
+		{
+			DAQmxBaseStopTask(taskHandle);
+			DAQmxBaseClearTask(taskHandle);
+			taskHandle = 0;
+		}
+		//_writeThread.join();
+		output((boost::format("stop reading, total read for: %d seconds") % j).str());
 
+		//Error:
+		/*
+		if (DAQmxFailed(error))
+		DAQmxBaseGetExtendedErrorInfo(errBuff, 2048);
+
+		if (error)
+		printf("DAQmxBase Error %ld: %s\n", error, errBuff);
+		*/
+	}while (use_TCP && readStatus != EXIT);
 	std::cout << "exit reading" << std::endl;
-	//Error:
-	/*
-	if (DAQmxFailed(error))
-	DAQmxBaseGetExtendedErrorInfo(errBuff, 2048);
-
-	if (error)
-	printf("DAQmxBase Error %ld: %s\n", error, errBuff);
-	*/
 	return 0;
 }
 
@@ -390,24 +404,40 @@ std::string startRead(ParamSet::Params &params)
 	loadConfig();
 	paramHelper->set(filtered);
 	autoParams->set(filtered);
+	std::string ret;
 	//Set flag
 	readStatus = DO;
-	output("Start reading");
-	read();
-	return "Finished reading";
+	try
+	{
+		readStartFlag_writer.set_value(true);
+		ret = "Start reading";
+	}
+	catch (std::future_error e)
+	{
+		if (e.code == std::future_errc::promise_already_satisfied)
+		{
+			ret = "Already reading";
+		}
+		else
+		{
+			ret = "Future error occured:";
+			ret += e.what();
+		}
+	}
+	return ret;
 }
 
 //!Stop reading from DAQ device
 std::string stopRead(ParamSet::Params &params)
 {
 	readStatus = HOLD;
-	return "stop reading";
+	return "Stop reading";
 }
 
 std::string exitRead(ParamSet::Params &params)
 {
 	readStatus = EXIT;
-	return "exit reading";
+	return "Exit reading";
 }
 
 int initialize()
@@ -612,6 +642,7 @@ void readByTcp()
 {
 	std::string cmd;
 	std::string reply;
+	std::thread _readThread(readThread);
 	while (readStatus != EXIT)
 	{
 		TcpServer::TcpServer *server = tcpServer;
@@ -620,7 +651,7 @@ void readByTcp()
 			if (server->is_connected(-1))
 			{
 				cmd = server->waitRecv();
-				if (cmd != TcpServer::TcpServer::EXIT_MSG)
+				if (cmd != TcpServer::TcpServer::EXIT_MSG || cmd != TcpServer::TcpServer::LOST_MSG)
 				{
 					reply = cmdHelper.exec(cmd);
 					output(reply);
@@ -632,6 +663,22 @@ void readByTcp()
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
+	try
+	{
+		readStartFlag_writer.set_value(false);
+	}
+	catch (std::future_error e)
+	{
+		if (e.code == std::future_errc::promise_already_satisfied)
+		{
+			std::cout << "Now it's reading, please wait for it finishes work" << std::endl;
+		}
+		else
+		{
+			std::cout << "Future error occured: " << e.what() << std::endl;
+		}
+	}
+	_readThread.join();
 }
 
 int makeClient(std::string ip, uint16_t port)
@@ -765,7 +812,7 @@ int main(int argc, char *argv[])
 			oss << argv[i];
 		}
 		cmdHelper.exec(oss.str());
-		read();
+		readThread();
 		return 0;
 	}
 	else if (cmd == "-ec")
