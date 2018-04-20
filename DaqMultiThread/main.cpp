@@ -231,6 +231,141 @@ int loadConfig()
 	return 0;
 }
 
+int output(std::string msg)
+{
+	std::cout << msg << std::endl;
+	std::cout.flush();
+	TcpServer::TcpServer *server = tcpServer;
+	if (server)
+	{
+		if (server->is_connected(0))
+			server->send(msg);
+	}
+	return 0;
+}
+
+int read()
+{
+	//Number of writing  HDD thread
+	size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
+	using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
+	std::vector<sharePtr_wthread> wthreads(wthreadNum);
+	std::vector<int32_t> writeFlag(wthreadNum);
+	if (saveMode == "BIT")
+	{
+		for (int i = 0; i < wthreadNum; i++)
+		{
+			writeFlag[i] = WriteHddThread::BIT;
+		}
+	}
+	else if (saveMode == "RAW")
+	{
+		for (int i = 0; i < wthreadNum; i++)
+		{
+			writeFlag[i] = WriteHddThread::RAW;
+		}
+	}
+	else
+	{
+		for (int i = 0; i < wthreadNum; i++)
+		{
+			writeFlag[i] = 0;
+		}
+		std::vector<std::string> delim = StringTool::strSplit(saveMode, ",");
+		if (delim.size() != wthreadNum)
+		{
+			output("Wrong use of saveMode!");
+			return -1;
+		}
+		for (int i = 0; i < wthreadNum; i++)
+		{
+			int32_t getFlag = 0;
+			std::vector<std::string> delim2 = StringTool::strSplit(delim[i], "|");
+			for (auto item : delim2)
+			{
+				if (item == "RAW")
+				{
+					getFlag = WriteHddThread::RAW;
+				}
+				else if (item == "BIT")
+				{
+					getFlag = WriteHddThread::BIT;
+				}
+				else
+				{
+					output("Wrong use of saveMode!");
+					readStatus = HOLD;
+					continue;
+				}
+				if ((writeFlag[i] & getFlag) == 0)
+				{
+					writeFlag[i] += getFlag;
+				}
+				else
+				{
+					output("Wrong use of saveMode!");
+					readStatus = HOLD;
+					continue;
+				}
+			}
+		}
+	}
+	for (int i = 0; i < wthreadNum; i++)
+	{
+		targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
+		wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
+	}
+	if (DAQmxBaseCreateTask("", &taskHandle) < 0)
+		throw "Error in creating task";
+	if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
+		throw "Error in creating AIVoltageChan";
+	if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
+		throw "Error in CfgSampClkTiming";
+	DAQmxBaseStartTask(taskHandle);
+	pointsToRead = samplesPerChan;
+	int j;
+	output((boost::format("start reading, readTime = %d") % readTime).str());
+	for (j = 0; j < readTime || readTime < 0; j++)
+	{
+		float64 *rdata;
+		int32	pointsRead = 0;
+		rdata = new float64[bufferSize*wthreadNum];
+		boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
+		DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
+		auto tmp = rdata;
+		for (int i = 0; i < wthreadNum; i++)
+		{
+			wthreads[i]->push(ptime, pointsRead, tmp);
+			tmp += pointsRead;
+		}
+		delete rdata;
+		//dataQueue.push(std::move(*wp));
+		if (readStatus != DO) readTime = 0;
+	}
+	//writeCmd = EXIT;
+
+	readStatus = HOLD;
+	if (taskHandle != 0)
+	{
+		DAQmxBaseStopTask(taskHandle);
+		DAQmxBaseClearTask(taskHandle);
+		taskHandle = 0;
+	}
+	//_writeThread.join();
+	output((boost::format("stop reading, total read for: %d seconds") % j).str());
+
+	std::cout << "exit reading" << std::endl;
+	//Error:
+	/*
+	if (DAQmxFailed(error))
+	DAQmxBaseGetExtendedErrorInfo(errBuff, 2048);
+
+	if (error)
+	printf("DAQmxBase Error %ld: %s\n", error, errBuff);
+	*/
+	return 0;
+}
+
 //Start reading from DAQ device
 std::string startRead(ParamSet::Params &params)
 {
@@ -294,12 +429,13 @@ int initialize()
 		paramHelper->bind("checkB", &checkB, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("tcpPort", &tcpPort, ParamSet::ParamHelper::INTEGER);
 		paramHelper->bind("ip_host", &ip_host, ParamSet::ParamHelper::TEXT);
+		paramHelper->bind("saveMode"), &saveMode, ParamSet::ParamHelper::TEXT);
 	}
 	if (!autoParams)
 	{
 		autoParams = new ParamSet::ParamHelper();
 		autoParams->bind("readTime", &readTime, ParamSet::ParamHelper::INTEGER);
-		autoParams->bind("saveMode", &saveMode, ParamSet::ParamHelper::TEXT);
+		//autoParams->bind("saveMode", &saveMode, ParamSet::ParamHelper::TEXT);
 	}
 	loadConfig();
 	cmdHelper.registCmd("read", &startRead, "start read daq");
@@ -466,141 +602,6 @@ void tcpThread()
 		if (server.status == TcpServer::TcpServer::EXIT) break;
 	}
 	use_TCP = false;
-}
-
-int output(std::string msg)
-{
-	std::cout << msg << std::endl;
-	std::cout.flush();
-	TcpServer::TcpServer *server = tcpServer;
-	if (server)
-	{
-		if (server->is_connected(0))
-			server->send(msg);
-	}
-	return 0;
-}
-
-int read()
-{
-	//Number of writing  HDD thread
-	size_t wthreadNum = std::count(channel.begin(), channel.end(), ',') + 1;
-	using sharePtr_wthread = std::shared_ptr<WriteHddThread::WriteHddThread>;
-	std::vector<sharePtr_wthread> wthreads(wthreadNum);
-	std::vector<int32_t> writeFlag(wthreadNum);
-	if (saveMode == "BIT")
-	{
-		for (int i = 0; i < wthreadNum; i++)
-		{
-			writeFlag[i] = WriteHddThread::BIT;
-		}
-	}
-	else if (saveMode == "RAW")
-	{
-		for (int i = 0; i < wthreadNum; i++)
-		{
-			writeFlag[i] = WriteHddThread::RAW;
-		}
-	}
-	else
-	{
-		for (int i = 0; i < wthreadNum; i++)
-		{
-			writeFlag[i] = 0;
-		}
-		std::vector<std::string> delim = StringTool::strSplit(saveMode, ",");
-		if (delim.size() != wthreadNum)
-		{
-			output("Wrong use of saveMode!");
-			return -1;
-		}
-		for (int i = 0; i < wthreadNum; i++)
-		{
-			int32_t getFlag = 0;
-			std::vector<std::string> delim2 = StringTool::strSplit(delim[i], "|");
-			for (auto item : delim2)
-			{
-				if (item == "RAW")
-				{
-					getFlag = WriteHddThread::RAW;
-				}
-				else if (item == "BIT")
-				{
-					getFlag = WriteHddThread::BIT;
-				}
-				else
-				{
-					output("Wrong use of saveMode!");
-					readStatus = HOLD;
-					continue;
-				}
-				if ((writeFlag[i] & getFlag) == 0)
-				{
-					writeFlag[i] += getFlag;
-				}
-				else
-				{
-					output("Wrong use of saveMode!");
-					readStatus = HOLD;
-					continue;
-				}
-			}
-		}
-	}
-	for (int i = 0; i < wthreadNum; i++)
-	{
-		targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
-		wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
-	}
-	if (DAQmxBaseCreateTask("", &taskHandle) < 0)
-		throw "Error in creating task";
-	if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
-		throw "Error in creating AIVoltageChan";
-	if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
-		throw "Error in CfgSampClkTiming";
-	DAQmxBaseStartTask(taskHandle);
-	pointsToRead = samplesPerChan;
-	int j;
-	output((boost::format("start reading, readTime = %d") % readTime).str());
-	for (j = 0; j < readTime || readTime < 0; j++)
-	{
-		float64 *rdata;
-		int32	pointsRead = 0;
-		rdata = new float64[bufferSize*wthreadNum];
-		boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
-		DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
-		auto tmp = rdata;
-		for (int i = 0; i < wthreadNum; i++)
-		{
-			wthreads[i]->push(ptime, pointsRead, tmp);
-			tmp += pointsRead;
-		}
-		delete rdata;
-		//dataQueue.push(std::move(*wp));
-		if (readStatus != DO) readTime = 0;
-	}
-	//writeCmd = EXIT;
-
-	readStatus = HOLD;
-	if (taskHandle != 0)
-	{
-		DAQmxBaseStopTask(taskHandle);
-		DAQmxBaseClearTask(taskHandle);
-		taskHandle = 0;
-	}
-	//_writeThread.join();
-	output((boost::format("stop reading, total read for: %d seconds") % j).str());
-
-	std::cout << "exit reading" << std::endl;
-//Error:
-	/*
-	if (DAQmxFailed(error))
-		DAQmxBaseGetExtendedErrorInfo(errBuff, 2048);
-
-	if (error)
-		printf("DAQmxBase Error %ld: %s\n", error, errBuff);
-	*/
-	return 0;
 }
 
 void readByTcp()
