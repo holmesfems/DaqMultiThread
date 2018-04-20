@@ -235,7 +235,11 @@ namespace TcpServer
 				{
 					if (e.code() != std::future_errc::promise_already_satisfied)
 					{
-						*_os << "Promise error occured:" << e.what();
+						*_os << "Promise error occured:" << e.what() << std::endl;
+					}
+					else
+					{
+						*_os << "Already satisfied!" << std::endl;
 					}
 				}
 				if (!(data == "exit"))
