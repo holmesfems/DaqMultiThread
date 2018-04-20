@@ -69,6 +69,8 @@ namespace TcpServer
 		void _on_write(const boost::system::error_code &err);
 		void _refresh_doneFlag();
 		void _done();
+		void _clear_recvMsg();
+		void _refresh_recvMsg();
 
 //		void _on_offline();
 //		void _start_listen();

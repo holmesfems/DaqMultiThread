@@ -37,9 +37,7 @@ namespace TcpServer
 	{
 		bool is_sending = !_msgQueue.empty();
 		_msgQueue.push(msg);
-		std::promise<std::string> newwriter;
-		_receive_msg_writer.swap(newwriter);
-		_receive_msg = _receive_msg_writer.get_future();
+		_refresh_recvMsg();
 		if(!is_sending)
 			_io.post(boost::bind(&TcpServer::_async_write, this));
 	}
@@ -65,6 +63,7 @@ namespace TcpServer
 
 	std::string TcpServer::lastRecv(int timeout)
 	{
+
 		if (timeout < 0 || _receive_msg.wait_for(std::chrono::milliseconds(timeout)) == std::future_status::ready)
 		{
 			try
@@ -87,9 +86,7 @@ namespace TcpServer
 	std::string TcpServer::waitRecv()
 	{
 		_refresh_doneFlag();
-		std::promise<std::string> newwriter;
-		_receive_msg_writer.swap(newwriter);
-		_receive_msg = _receive_msg_writer.get_future();
+		_clear_recvMsg();
 		std::string ret;
 		try
 		{
@@ -301,6 +298,21 @@ namespace TcpServer
 			{
 				*_os << "Promise error occured: " << e.what() << std::endl;
 			}
+		}
+	}
+
+	void TcpServer::_clear_recvMsg()
+	{
+		std::promise<std::string> newpromise;
+		_receive_msg_writer.swap(newpromise);
+		_receive_msg = _receive_msg_writer.get_future();
+	}
+
+	void TcpServer::_refresh_recvMsg()
+	{
+		if (!_receive_msg.valid() || _receive_msg.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+		{
+			_clear_recvMsg();
 		}
 	}
 }
