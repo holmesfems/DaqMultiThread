@@ -1,6 +1,6 @@
 //#pragma once
 /*
-* tcpserver version 180418.rev2
+* tcpserver version 180418.rev3
 * tcpServer.h
 * Created at 2017/06/25
 * Copyright (C) 2017 zhai <holmesfems@gmail.com>
@@ -55,8 +55,11 @@ namespace TcpServer
 		std::future<int> _connection_status;
 		std::promise<int> _connection_status_writer;
 
+		//Flags
 		std::future<bool> _doneFlag;
 		std::promise<bool> _doneFlag_writer;
+
+		std::atomic<bool> _writeDone;
 
 		std::queue<std::string> _recvQueue;
 
