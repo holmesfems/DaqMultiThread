@@ -442,6 +442,7 @@ std::string exitRead(ParamSet::Params &params)
 {
 	readStatus = EXIT;
 	std::string ret;
+	/*
 	try
 	{
 		readStartFlag_writer.set_value(false);
@@ -460,11 +461,13 @@ std::string exitRead(ParamSet::Params &params)
 		}
 	}
 	//exit tcp server
+	
 	TcpServer::TcpServer *server = tcpServer;
 	if (server)
 	{
 		server->exit();
-	}
+	}*/
+	ret = "Try to exit reading";
 	return ret;
 }
 
@@ -697,6 +700,7 @@ void readByTcp()
 	try
 	{
 		readStartFlag_writer.set_value(false);
+		std::cout << "try to exit reading" << std::endl;
 	}
 	catch (std::future_error e)
 	{
@@ -708,6 +712,11 @@ void readByTcp()
 		{
 			std::cout << "Future error occured: " << e.what() << std::endl;
 		}
+	}
+	TcpServer::TcpServer* server = tcpServer;
+	if (server)
+	{
+		server->exit();
 	}
 	_readThread.join();
 }
