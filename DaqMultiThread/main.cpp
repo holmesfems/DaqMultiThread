@@ -148,6 +148,10 @@ uint16_t tcpPort = 23333;
 
 std::atomic<TcpServer::TcpServer*> tcpServer;
 
+//future
+std::shared_future<TcpServer::TcpServer*> tcpServer_future;
+std::promise<TcpServer::TcpServer*> tcpServer_promise;
+
 std::future<bool> readStartFlag;
 std::promise<bool> readStartFlag_writer;
 
@@ -240,7 +244,7 @@ int output(std::string msg)
 	TcpServer::TcpServer *server = tcpServer;
 	if (server)
 	{
-		if (server->is_connected(0))
+		if (server->is_online(0))
 			server->send(msg);
 	}
 	return 0;
@@ -376,7 +380,7 @@ int readThread()
 		printf("DAQmxBase Error %ld: %s\n", error, errBuff);
 		*/
 	}while (use_TCP && readStatus != EXIT);
-	std::cout << "exit reading" << std::endl;
+	std::cout << "Exit succeed" << std::endl;
 	return 0;
 }
 
@@ -437,7 +441,31 @@ std::string stopRead(ParamSet::Params &params)
 std::string exitRead(ParamSet::Params &params)
 {
 	readStatus = EXIT;
-	return "Exit reading";
+	std::string ret;
+	try
+	{
+		readStartFlag_writer.set_value(false);
+		ret = "Try to exit reading";
+	}
+	catch (std::future_error e)
+	{
+		if (e.code() == std::future_errc::promise_already_satisfied)
+		{
+			ret = "Try to exit this reading";
+		}
+		else
+		{
+			ret = "Future error occured:";
+			ret += e.what();
+		}
+	}
+	//exit tcp server
+	TcpServer::TcpServer *server = tcpServer;
+	if (server)
+	{
+		server->exit();
+	}
+	return ret;
 }
 
 int initialize()
@@ -474,6 +502,7 @@ int initialize()
 	//data[0] = new float64[bufferSize];
 	//data[1] = new float64[bufferSize];
 	//writeCmd = HOLD;
+	tcpServer_future = tcpServer_promise.get_future().share();
 	readStatus = HOLD;
 	return 0;
 }
@@ -625,6 +654,7 @@ void tcpThread()
 		boost::asio::io_service io_service;
 		TcpServer::TcpServer server(io_service, tcpPort, &std::cout);
 		tcpServer = &server;
+		tcpServer_promise.set_value(&server);
 		server.start_accept();
 		io_service.run();
 		std::cout << "server status = " << server.status << std::endl;
@@ -633,8 +663,12 @@ void tcpThread()
 			std::cout << "Error occured while waiting done" << std::endl;
 		}
 		tcpServer = NULL;
+		std::promise<TcpServer::TcpServer*> newpromise;
+		tcpServer_promise.swap(newpromise);
+		tcpServer_future = tcpServer_promise.get_future().share();
 		if (server.status == TcpServer::TcpServer::EXIT) break;
 	}
+	tcpServer_promise.set_value(NULL);
 	use_TCP = false;
 }
 
@@ -645,7 +679,7 @@ void readByTcp()
 	std::thread _readThread(readThread);
 	while (readStatus != EXIT)
 	{
-		TcpServer::TcpServer *server = tcpServer;
+		TcpServer::TcpServer *server = tcpServer_future.get();
 		if (server != NULL)
 		{
 			if (server->is_connected(-1))
@@ -657,10 +691,6 @@ void readByTcp()
 					output(reply);
 				}
 			}
-		}
-		else
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
 	try

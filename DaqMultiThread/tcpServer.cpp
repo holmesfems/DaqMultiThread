@@ -1,6 +1,6 @@
 /*
 * tcpServer.cpp
-* version 180418rev3
+* version 180418rev4
 * Created at 2017/06/25
 * Copyright (C) 2017 zhai <holmesfems@gmail.com>
 *
@@ -27,7 +27,7 @@ namespace TcpServer
 
 	void TcpServer::start_accept()
 	{
-		_connection_status = _connection_status_writer.get_future();
+		_connection_status = _connection_status_writer.get_future().share();
 		_acceptor.async_accept(
 			_socket,
 			boost::bind(&TcpServer::_on_accept, this, boost::asio::placeholders::error));
@@ -61,26 +61,41 @@ namespace TcpServer
 		}
 	}
 
+	bool TcpServer::is_online(int timeout)
+	{
+		if (is_connected(timeout))
+		{
+			return status == ONLINE;
+		}
+		else
+		{
+			return false;
+		}
+	}
+
 	std::string TcpServer::lastRecv(int timeout)
 	{
-
+		_refresh_doneFlag();
+		std::string ret;
 		if (timeout < 0 || _receive_msg.wait_for(std::chrono::milliseconds(timeout)) == std::future_status::ready)
 		{
 			try
 			{
-				return _receive_msg.get();
+				ret = _receive_msg.get();
 			}
 			catch (std::future_error e)
 			{
 				std::ostringstream oss;
 				oss << "Future Error:" << e.what();
-				return oss.str();
+				ret = oss.str();
 			}
 		}
 		else
 		{
-			return "MSG NOT VALID (Timeout)";
+			ret = "MSG NOT VALID (Timeout)";
 		}
+		_done();
+		return ret;
 	}
 
 	std::string TcpServer::waitRecv()
@@ -96,7 +111,6 @@ namespace TcpServer
 		{
 			std::ostringstream oss;
 			oss << "Future error:" << e.what();
-			_done();
 			ret = oss.str();
 		}
 		_done();
@@ -105,11 +119,15 @@ namespace TcpServer
 
 	bool TcpServer::waitAllDone(int timeout)
 	{
+		if (!_doneFlag.valid())
+		{
+			return true;
+		}
 		if (timeout < 0 || _doneFlag.wait_for(std::chrono::milliseconds(timeout)) == std::future_status::ready)
 		{
 			try
 			{
-				return _doneFlag.get();
+				bool ret = _doneFlag.get();
 			}
 			catch (std::future_error e)
 			{
@@ -151,6 +169,7 @@ namespace TcpServer
 				*_os << e.what();
 			}
 		}
+		waitAllDone();
 		_io.stop();
 	}
 
@@ -283,7 +302,7 @@ namespace TcpServer
 	{
 		std::promise<bool> newpromise;
 		_doneFlag_writer.swap(newpromise);
-		_doneFlag = _doneFlag_writer.get_future();
+		_doneFlag = _doneFlag_writer.get_future().share();
 	}
 
 	void TcpServer::_done()

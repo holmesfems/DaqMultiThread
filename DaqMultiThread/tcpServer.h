@@ -1,6 +1,6 @@
 //#pragma once
 /*
-* tcpserver version 180418.rev2
+* tcpserver version 180418.rev4
 * tcpServer.h
 * Created at 2017/06/25
 * Copyright (C) 2017 zhai <holmesfems@gmail.com>
@@ -29,6 +29,7 @@ namespace TcpServer
 		//void stop_accept();
 		int status = 0;
 		bool is_connected(int timeout = 100);
+		bool is_online(int timeout = 100);
 		std::string lastRecv(int timeout = 1000);
 		std::string waitRecv();
 		bool waitAllDone(int timeout = 100);
@@ -52,10 +53,10 @@ namespace TcpServer
 		std::future<std::string> _receive_msg;
 		std::promise<std::string> _receive_msg_writer;
 		
-		std::future<int> _connection_status;
+		std::shared_future<int> _connection_status;
 		std::promise<int> _connection_status_writer;
 
-		std::future<bool> _doneFlag;
+		std::shared_future<bool> _doneFlag;
 		std::promise<bool> _doneFlag_writer;
 
 		std::queue<std::string> _recvQueue;
