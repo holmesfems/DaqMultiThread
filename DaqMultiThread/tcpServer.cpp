@@ -127,7 +127,7 @@ namespace TcpServer
 		{
 			try
 			{
-				bool ret = _doneFlag.get();
+				return _doneFlag.get();
 			}
 			catch (std::future_error e)
 			{
