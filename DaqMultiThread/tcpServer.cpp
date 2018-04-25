@@ -23,6 +23,7 @@ namespace TcpServer
 	{
 		if (_os == NULL) //dummy
 			_os = new std::ostringstream();
+		_writeDone = true;
 	}
 
 	void TcpServer::start_accept()
@@ -35,10 +36,9 @@ namespace TcpServer
 
 	void TcpServer::send(std::string msg)
 	{
-		bool is_sending = !_msgQueue.empty();
 		_msgQueue.push(msg);
 		_refresh_recvMsg();
-		if(!is_sending)
+		if (_writeDone)
 			_io.post(boost::bind(&TcpServer::_async_write, this));
 	}
 
@@ -273,7 +273,12 @@ namespace TcpServer
 
 	void TcpServer::_async_write()
 	{
-		if (_msgQueue.empty()) return;
+		if (_msgQueue.empty())
+		{
+			_writeDone = true;
+			return;
+		}
+		_writeDone = false;
 		std::string msg = _msgQueue.front();
 		_msgQueue.pop();
 		msg = msg + "\n";
@@ -295,6 +300,8 @@ namespace TcpServer
 			*_os << "write succeed" << std::endl;
 			if (!_msgQueue.empty())
 				_async_write();
+			else
+				_writeDone = true;
 		}
 	}
 
