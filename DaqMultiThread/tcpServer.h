@@ -56,7 +56,7 @@ namespace TcpServer
 		std::shared_future<int> _connection_status;
 		std::promise<int> _connection_status_writer;
 
-		std::future<bool> _doneFlag;
+		std::shared_future<bool> _doneFlag;
 		std::promise<bool> _doneFlag_writer;
 
 		std::atomic<bool> _writeDone;
