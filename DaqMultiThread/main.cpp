@@ -663,9 +663,7 @@ void tcpThread()
 			std::cout << "Error occured while waiting done" << std::endl;
 		}
 		tcpServer = NULL;
-		std::promise<TcpServer::TcpServer*> newpromise;
-		tcpServer_promise.swap(newpromise);
-		tcpServer_future = tcpServer_promise.get_future().share();
+		
 		if (server.status == TcpServer::TcpServer::EXIT) break;
 	}
 	tcpServer_promise.set_value(NULL);
@@ -680,6 +678,9 @@ void readByTcp()
 	while (readStatus != EXIT)
 	{
 		TcpServer::TcpServer *server = tcpServer_future.get();
+		std::promise<TcpServer::TcpServer*> newpromise;
+		tcpServer_promise.swap(newpromise);
+		tcpServer_future = tcpServer_promise.get_future().share();
 		if (server != NULL)
 		{
 			if (server->is_connected(-1))
