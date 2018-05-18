@@ -7,6 +7,7 @@
 * Distributed under terms of the MIT license.
 */
 #include "tcpServer.h"
+#include "stringTool.h"
 #include <sstream>
 
 namespace TcpServer
@@ -36,7 +37,11 @@ namespace TcpServer
 
 	void TcpServer::send(std::string msg)
 	{
-		_msgQueue.push(msg);
+		auto msglist = StringTool::strSplit(msg, "\n");
+		for (auto item : msglist)
+		{
+			_msgQueue.push(item);
+		}
 		_refresh_recvMsg();
 		if (_writeDone)
 			_io.post(boost::bind(&TcpServer::_async_write, this));
