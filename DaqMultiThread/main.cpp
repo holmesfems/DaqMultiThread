@@ -741,7 +741,7 @@ void readByTcp()
 		std::promise<TcpServer::TcpServer*> newpromise;
 		tcpServer_promise.swap(newpromise);
 		tcpServer_future = tcpServer_promise.get_future().share();
-		while (server != NULL)
+		while (server!=NULL && readStatus != EXIT)
 		{
 			if (server->is_connected(-1))
 			{
@@ -752,6 +752,8 @@ void readByTcp()
 					reply = cmdHelper.exec(cmd);
 					output(reply);
 				}
+				else
+					break;
 			}
 			else
 			{
