@@ -510,11 +510,11 @@ std::string getParam(ParamSet::Params &params)
 			auto &target = item.value()[paramName];
 			if (!target.is_null())
 			{
-				if (target.is_string)
+				if (target.is_string())
 					return (boost::format("%s:%s = %s") % item.key() % paramName% item.value()[paramName].get<std::string>()).str();
-				else if (target.is_number_integer)
+				else if (target.is_number_integer())
 					return (boost::format("%s:%s = %d") % item.key() % paramName% item.value()[paramName].get<int>()).str();
-				else if (target.is_number_float)
+				else if (target.is_number_float())
 					return (boost::format("%s:%s = %lf") % item.key() % paramName% item.value()[paramName].get<double>()).str();
 				else
 					return "Unknown type";
