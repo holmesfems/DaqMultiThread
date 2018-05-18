@@ -106,10 +106,10 @@ int32       bufferSize = 80814;
 //float64     *(data[2]);
 int32       pointsToRead = -1;
 float64     timeout = 10.0; //sec
-int32       readSets = 10;
 
 // ReadTime
 std::atomic<int32> readTime;//sec,-1 for infinity
+std::atomic<int32> nowReadTime;
 
 //SaveConfig::Config *config;
 ParamSet::ParamHelper *paramHelper = NULL;
@@ -154,36 +154,46 @@ std::promise<TcpServer::TcpServer*> tcpServer_promise;
 
 std::future<bool> readStartFlag;
 std::promise<bool> readStartFlag_writer;
+std::atomic<bool> isReading;
+
 
 std::string saveMode = "BIT";
 
 //!Save the parameter in paramHelper to a config file
-int saveConfig()
+nlohmann::json& paramHelperToJson(ParamSet::ParamHelper &ph)
 {
-	for (auto item : paramHelper->bindlist())
+	nlohmann::json json;
+	for (auto item : ph.bindlist())
 	{
 		switch (item.second.second)
 		{
 		case ParamSet::ParamHelper::INTEGER:
-			configJson[item.first] = *((int*)item.second.first);
+			json[item.first] = *((int*)item.second.first);
 			break;
 		case ParamSet::ParamHelper::TEXT:
-			configJson[item.first] = *((std::string*)item.second.first);
+			json[item.first] = *((std::string*)item.second.first);
 			break;
 		case ParamSet::ParamHelper::FLOAT64:
-			configJson[item.first] = *((double*)item.second.first);
+			json[item.first] = *((double*)item.second.first);
 			break;
 		}
 	}
+	return json;
+}
+
+
+int saveConfig()
+{
+	configJson = paramHelperToJson(*paramHelper);
 	std::ofstream ofs(configFileName);
 	if (ofs.is_open())
 	{
 		ofs << configJson.dump(4);
-		std::cout << "Save config succeed!" << std::endl;
+		output_local("Save config succeed!");
 	}
 	else
 	{
-		std::cout << "Can't open file:" << configFileName << std::endl;
+		output_local("Can't open file:" + configFileName);
 	}
 	ofs.close();
 	return 0;
@@ -198,7 +208,7 @@ int loadConfig()
 	{ //file exists
 		try
 		{
-			std::cout << "Read Configuation file succeed!" << std::endl;
+			output_local("Read Configuation file succeed!");
 			configJson.clear();
 			ifs >> configJson;
 			ParamSet::VariableBind bind = paramHelper->bindlist();
@@ -206,7 +216,7 @@ int loadConfig()
 			{
 				if (bind.find(item.key()) == bind.cend())
 				{
-					std::cout << "Error occured: key \"" << item.key() << "\" is not valid" << std::endl;
+					output_local("Error occured: key \"" + item.key() + "\" is not valid");
 					continue;
 				}
 				ParamSet::VariableBindItem binditem = bind[item.key()];
@@ -226,7 +236,7 @@ int loadConfig()
 		}
 		catch(std::exception e)
 		{
-			std::cout << "Error occured while reading config file:" << e.what() << std::endl;
+			output_local("Error occured while reading config file:" + e.what());
 		}
 	}
 	else
@@ -237,10 +247,16 @@ int loadConfig()
 	return 0;
 }
 
+int output_local(std::string msg)
+{
+	std::cout << boost::posix_time::to_iso_extended_string(boost::posix_time::microsec_clock::local_time()) << "\t" << msg << std::endl;
+	std::cout.flush();
+	return 0;
+}
+
 int output(std::string msg)
 {
-	std::cout << msg << std::endl;
-	std::cout.flush();
+	output_local(msg);
 	TcpServer::TcpServer *server = tcpServer;
 	if (server)
 	{
@@ -256,6 +272,7 @@ int readThread()
 	do
 	{
 		//refresh flag
+		isReading = false;
 		if (use_TCP)
 		{
 			std::promise<bool> newpromise;
@@ -338,15 +355,15 @@ int readThread()
 			throw "Error in creating AIVoltageChan";
 		if (DAQmxBaseCfgSampClkTiming(taskHandle, source.c_str(), sampleRate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, samplesPerChan) < 0)
 			throw "Error in CfgSampClkTiming";
-		DAQmxBaseStartTask(taskHandle);
+		float64 *rdata;
+		rdata = new float64[bufferSize*wthreadNum];
 		pointsToRead = samplesPerChan;
-		int j;
 		output((boost::format("start reading, readTime = %d") % readTime).str());
-		for (j = 0; j < readTime || readTime < 0; j++)
+		isReading = true;
+		DAQmxBaseStartTask(taskHandle);
+		for (nowReadTime = 0; nowReadTime < readTime || readTime < 0; nowReadTime++)
 		{
-			float64 *rdata;
 			int32	pointsRead = 0;
-			rdata = new float64[bufferSize*wthreadNum];
 			boost::posix_time::ptime ptime = boost::posix_time::microsec_clock::local_time();
 			DAQmxBaseReadAnalogF64(taskHandle, pointsToRead, timeout, DAQmx_Val_GroupByChannel, rdata, bufferSize*wthreadNum, &pointsRead, NULL);
 			auto tmp = rdata;
@@ -355,10 +372,10 @@ int readThread()
 				wthreads[i]->push(ptime, pointsRead, tmp);
 				tmp += pointsRead;
 			}
-			delete rdata;
 			//dataQueue.push(std::move(*wp));
 			if (readStatus != DO) readTime = 0;
 		}
+		delete rdata;
 		//writeCmd = EXIT;
 
 		readStatus = HOLD;
@@ -369,7 +386,7 @@ int readThread()
 			taskHandle = 0;
 		}
 		//_writeThread.join();
-		output((boost::format("stop reading, total read for: %d seconds") % j).str());
+		output((boost::format("stop reading, total read for: %d seconds") % nowReadTime).str());
 
 		//Error:
 		/*
@@ -380,7 +397,7 @@ int readThread()
 		printf("DAQmxBase Error %ld: %s\n", error, errBuff);
 		*/
 	}while (use_TCP && readStatus != EXIT);
-	std::cout << "Exit succeed" << std::endl;
+	output_local("Exit succeed");
 	return 0;
 }
 
@@ -471,6 +488,35 @@ std::string exitRead(ParamSet::Params &params)
 	return ret;
 }
 
+std::string getParam(ParamSet::Params &params)
+{
+	std::string paramName;
+	ParamSet::ParamHelper ph;
+	ph.bind("", &paramName, ParamSet::ParamHelper::TEXT);
+	ph.set(params);
+	nlohmann::json json;
+	json["Params"] = paramHelperToJson(*paramHelper);
+	json["Auto"] = paramHelperToJson(*autoParams);
+	if (paramName.empty())
+	{
+		//show all params:
+		output(json.dump(4));
+		return "Get param done!";
+	}
+	else
+	{
+		for (auto item : json.items())
+		{
+			if (!item.value()[paramName].is_null())
+			{
+				return (boost::format("%s:%s = %s") % item.key() % paramName% item.value()[paramName].get<std::string>()).str();
+			}
+		}
+		return "Can't find variable: " + paramName;
+	}
+
+}
+
 int initialize()
 {
 	if (!paramHelper)
@@ -485,7 +531,7 @@ int initialize()
 		paramHelper->bind("sampleRate", &sampleRate, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("bufferSize", &bufferSize, ParamSet::ParamHelper::INTEGER);
 		paramHelper->bind("timeout", &timeout, ParamSet::ParamHelper::FLOAT64);
-		paramHelper->bind("readSets", &readSets, ParamSet::ParamHelper::INTEGER);
+		//paramHelper->bind("readSets", &readSets, ParamSet::ParamHelper::INTEGER);
 		paramHelper->bind("checkA", &checkA, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("checkB", &checkB, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("tcpPort", &tcpPort, ParamSet::ParamHelper::INTEGER);
@@ -496,17 +542,20 @@ int initialize()
 	{
 		autoParams = new ParamSet::ParamHelper();
 		autoParams->bind("readTime", &readTime, ParamSet::ParamHelper::INTEGER);
+		autoParams->bind("nowReadTime", &nowReadTime, ParamSet::ParamHelper::INTEGER);
 		//autoParams->bind("saveMode", &saveMode, ParamSet::ParamHelper::TEXT);
 	}
 	loadConfig();
 	cmdHelper.registCmd("read", &startRead, "start read daq");
 	cmdHelper.registCmd("stop", &stopRead, "stop read daq");
 	cmdHelper.registCmd("exit", &exitRead, "exit read daq");
+	cmdHelper.registCmd("get", &getParam, "get parameters");
 	//data[0] = new float64[bufferSize];
 	//data[1] = new float64[bufferSize];
 	//writeCmd = HOLD;
 	tcpServer_future = tcpServer_promise.get_future().share();
 	readStatus = HOLD;
+	isReading = false;
 	return 0;
 }
 
@@ -655,7 +704,7 @@ void tcpThread()
 	{
 		use_TCP = true;
 		boost::asio::io_service io_service;
-		TcpServer::TcpServer server(io_service, tcpPort, &std::cout);
+		TcpServer::TcpServer server(io_service, tcpPort);
 		tcpServer = &server;
 		tcpServer_promise.set_value(&server);
 		server.start_accept();
@@ -691,6 +740,7 @@ void readByTcp()
 				cmd = server->waitRecv();
 				if (cmd != TcpServer::TcpServer::EXIT_MSG && cmd != TcpServer::TcpServer::LOST_MSG)
 				{
+					output_local("Received Command:" + cmd);
 					reply = cmdHelper.exec(cmd);
 					output(reply);
 				}
@@ -700,17 +750,17 @@ void readByTcp()
 	try
 	{
 		readStartFlag_writer.set_value(false);
-		std::cout << "try to exit reading" << std::endl;
+		output_local("try to exit reading");
 	}
 	catch (std::future_error e)
 	{
 		if (e.code() == std::future_errc::promise_already_satisfied)
 		{
-			std::cout << "Now it's reading, please wait for it finishes work" << std::endl;
+			output_local("Now it's reading, please wait for it finishes work");
 		}
 		else
 		{
-			std::cout << "Future error occured: " << e.what() << std::endl;
+			output_local("Future error occured: " + e.what());
 		}
 	}
 	TcpServer::TcpServer* server = tcpServer;
