@@ -154,7 +154,7 @@ std::promise<TcpServer::TcpServer*> tcpServer_promise;
 
 std::future<bool> readStartFlag;
 std::promise<bool> readStartFlag_writer;
-std::atomic<bool> isReading;
+//std::atomic<bool> isReading;
 
 
 std::string saveMode = "BIT";
@@ -272,7 +272,7 @@ int readThread()
 	do
 	{
 		//refresh flag
-		isReading = false;
+		//isReading = false;
 		if (use_TCP)
 		{
 			std::promise<bool> newpromise;
@@ -359,7 +359,7 @@ int readThread()
 		rdata = new float64[bufferSize*wthreadNum];
 		pointsToRead = samplesPerChan;
 		output((boost::format("start reading, readTime = %d") % readTime).str());
-		isReading = true;
+		//isReading = true;
 		DAQmxBaseStartTask(taskHandle);
 		for (nowReadTime = 0; nowReadTime < readTime || readTime < 0; nowReadTime++)
 		{
@@ -555,7 +555,7 @@ int initialize()
 	//writeCmd = HOLD;
 	tcpServer_future = tcpServer_promise.get_future().share();
 	readStatus = HOLD;
-	isReading = false;
+	//isReading = false;
 	return 0;
 }
 
