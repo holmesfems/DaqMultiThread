@@ -161,7 +161,7 @@ std::string saveMode = "BIT";
 
 int output_local(std::string msg)
 {
-	std::cout << boost::posix_time::to_iso_extended_string(boost::posix_time::microsec_clock::local_time()) << "\t" << msg << std::endl;
+	std::cout << boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) << "\t" << msg << std::endl;
 	std::cout.flush();
 	return 0;
 }
@@ -733,7 +733,7 @@ void readByTcp()
 		std::promise<TcpServer::TcpServer*> newpromise;
 		tcpServer_promise.swap(newpromise);
 		tcpServer_future = tcpServer_promise.get_future().share();
-		if (server != NULL)
+		while (server != NULL)
 		{
 			if (server->is_connected(-1))
 			{
@@ -744,6 +744,10 @@ void readByTcp()
 					reply = cmdHelper.exec(cmd);
 					output(reply);
 				}
+			}
+			else
+			{
+				break;
 			}
 		}
 	}
