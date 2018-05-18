@@ -510,6 +510,10 @@ std::string getParam(ParamSet::Params &params)
 			auto &target = item.value()[paramName];
 			if (!target.is_null())
 			{
+				std::ostringstream oss;
+				oss << (boost::format("%s:%s = ") % item.key() % paramName).str() << target;
+				return oss.str();
+				/*
 				if (target.is_string())
 					return (boost::format("%s:%s = %s") % item.key() % paramName% item.value()[paramName].get<std::string>()).str();
 				else if (target.is_number_integer())
@@ -518,6 +522,7 @@ std::string getParam(ParamSet::Params &params)
 					return (boost::format("%s:%s = %lf") % item.key() % paramName% item.value()[paramName].get<double>()).str();
 				else
 					return "Unknown type";
+				*/
 			}
 		}
 		return "Can't find variable: " + paramName;
@@ -730,6 +735,17 @@ void tcpThread()
 	use_TCP = false;
 }
 
+void readByKbd()
+{
+	std::string cmd;
+	while (true)
+	{
+		std::getline(std::cin, cmd);
+		output_local((boost::format("Exec command: %s") % cmd).str());
+		output(cmdHelper.exec(cmd));
+	}
+}
+
 void readByTcp()
 {
 	std::string cmd;
@@ -748,7 +764,7 @@ void readByTcp()
 				cmd = server->waitRecv();
 				if (cmd != TcpServer::TcpServer::EXIT_MSG && cmd != TcpServer::TcpServer::LOST_MSG)
 				{
-					output_local("Received Command:" + cmd);
+					output_local((boost::format("Received Command: %s") % cmd).str());
 					reply = cmdHelper.exec(cmd);
 					output(reply);
 				}
@@ -842,7 +858,9 @@ int main(int argc, char *argv[])
 	{
 		initialize();
 		std::thread _tcpThread(tcpThread);
+		//std::thread _kbdThread(readByKbd);
 		readByTcp();
+		
 		_tcpThread.join();
 		return 0;
 	}
