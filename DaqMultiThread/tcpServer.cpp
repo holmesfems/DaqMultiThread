@@ -263,15 +263,8 @@ namespace TcpServer
 						*_os << "Already satisfied!" << std::endl;
 					}
 				}
-				if (!(data == "exit"))
-				{
-					_receive_buff.consume(_receive_buff.size());
-					_async_receive();
-				}
-				else
-				{
-					status = EXIT;
-				}
+				_receive_buff.consume(_receive_buff.size());
+				_async_receive();
 			}
 		}
 	}

@@ -459,7 +459,7 @@ std::string exitRead(ParamSet::Params &params)
 {
 	readStatus = EXIT;
 	std::string ret;
-	/*
+	
 	try
 	{
 		readStartFlag_writer.set_value(false);
@@ -483,8 +483,8 @@ std::string exitRead(ParamSet::Params &params)
 	if (server)
 	{
 		server->exit();
-	}*/
-	ret = "Try to exit reading";
+	}
+		//et = "Try to exit reading";
 	return ret;
 }
 
@@ -858,9 +858,9 @@ int main(int argc, char *argv[])
 	{
 		initialize();
 		std::thread _tcpThread(tcpThread);
-		//std::thread _kbdThread(readByKbd);
+		std::thread _kbdThread(readByKbd);
 		readByTcp();
-		
+		_kbdThread.detach();
 		_tcpThread.join();
 		return 0;
 	}
