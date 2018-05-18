@@ -159,8 +159,27 @@ std::promise<bool> readStartFlag_writer;
 
 std::string saveMode = "BIT";
 
+int output_local(std::string msg)
+{
+	std::cout << boost::posix_time::to_iso_extended_string(boost::posix_time::microsec_clock::local_time()) << "\t" << msg << std::endl;
+	std::cout.flush();
+	return 0;
+}
+
+int output(std::string msg)
+{
+	output_local(msg);
+	TcpServer::TcpServer *server = tcpServer;
+	if (server)
+	{
+		if (server->is_online(0))
+			server->send(msg);
+	}
+	return 0;
+}
+
 //!Save the parameter in paramHelper to a config file
-nlohmann::json& paramHelperToJson(ParamSet::ParamHelper &ph)
+nlohmann::json paramHelperToJson(ParamSet::ParamHelper &ph)
 {
 	nlohmann::json json;
 	for (auto item : ph.bindlist())
@@ -193,7 +212,7 @@ int saveConfig()
 	}
 	else
 	{
-		output_local("Can't open file:" + configFileName);
+		output_local((boost::format("Can't open file: %s") % configFileName).str());
 	}
 	ofs.close();
 	return 0;
@@ -216,7 +235,7 @@ int loadConfig()
 			{
 				if (bind.find(item.key()) == bind.cend())
 				{
-					output_local("Error occured: key \"" + item.key() + "\" is not valid");
+					output_local((boost::format("Error occured: key \"%s\" is not valid") % item.key()).str());
 					continue;
 				}
 				ParamSet::VariableBindItem binditem = bind[item.key()];
@@ -236,7 +255,7 @@ int loadConfig()
 		}
 		catch(std::exception e)
 		{
-			output_local("Error occured while reading config file:" + e.what());
+			output_local((boost::format("Error occured while reading config file:%s") % e.what()).str());
 		}
 	}
 	else
@@ -244,25 +263,6 @@ int loadConfig()
 		saveConfig();
 	}
 	ifs.close();
-	return 0;
-}
-
-int output_local(std::string msg)
-{
-	std::cout << boost::posix_time::to_iso_extended_string(boost::posix_time::microsec_clock::local_time()) << "\t" << msg << std::endl;
-	std::cout.flush();
-	return 0;
-}
-
-int output(std::string msg)
-{
-	output_local(msg);
-	TcpServer::TcpServer *server = tcpServer;
-	if (server)
-	{
-		if (server->is_online(0))
-			server->send(msg);
-	}
 	return 0;
 }
 
@@ -760,7 +760,7 @@ void readByTcp()
 		}
 		else
 		{
-			output_local("Future error occured: " + e.what());
+			output_local((boost::format("Future error occured: %s") % e.what()).str());
 		}
 	}
 	TcpServer::TcpServer* server = tcpServer;
