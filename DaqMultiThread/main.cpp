@@ -166,15 +166,21 @@ int output_local(std::string msg)
 	return 0;
 }
 
-int output(std::string msg)
+int output_toClient(std::string msg)
 {
-	output_local(msg);
 	TcpServer::TcpServer *server = tcpServer;
 	if (server)
 	{
 		if (server->is_online(0))
 			server->send(msg);
 	}
+	return 0;
+}
+
+int output(std::string msg)
+{
+	output_local(msg);
+	output_toClient(msg);
 	return 0;
 }
 
@@ -500,7 +506,10 @@ std::string getParam(ParamSet::Params &params)
 	if (paramName.empty())
 	{
 		//show all params:
-		output(json.dump(4));
+		output_local((boost::format("\n%s") % json.dump(4)).str());
+		std::ostringstream oss;
+		oss << json;
+		output_toClient(oss.str());
 		return "Get param done!";
 	}
 	else
