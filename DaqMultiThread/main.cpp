@@ -80,7 +80,6 @@
 using Filter = std::vector<std::string>;
 
 //Default parameters
-
 //Task parameters
 int32       error = 0;
 TaskHandle  taskHandle = 0;
@@ -115,6 +114,7 @@ std::atomic<int32> nowReadTime;
 ParamSet::ParamHelper *paramHelper = NULL;
 ParamSet::ParamHelper *autoParams = NULL;
 const std::string configFileName = "parameter.conf";
+std::string savePath = ".";
 nlohmann::json configJson;
 
 //Mutex
@@ -352,7 +352,7 @@ int readThread()
 		}
 		for (int i = 0; i < wthreadNum; i++)
 		{
-			targetFileName = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
+			targetFileName = (boost::format("%s/BS%s_%d.dat") % savePath % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
 			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
 		}
 		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
@@ -416,6 +416,7 @@ std::string startRead(ParamSet::Params &params)
 	filter.push_back("sampleRate");
 	filter.push_back("samplesPerChan");
 	filter.push_back("channel");
+	filter.push_back("savePath");
 	filter.push_back("");
 	filter.push_back("saveMode");
 	ParamSet::Params filtered;
@@ -554,6 +555,7 @@ int initialize()
 		paramHelper->bind("bufferSize", &bufferSize, ParamSet::ParamHelper::INTEGER);
 		paramHelper->bind("timeout", &timeout, ParamSet::ParamHelper::FLOAT64);
 		//paramHelper->bind("readSets", &readSets, ParamSet::ParamHelper::INTEGER);
+		paramHelper->bind("savePath", &savePath, ParamSet::ParamHelper::TEXT);
 		paramHelper->bind("checkA", &checkA, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("checkB", &checkB, ParamSet::ParamHelper::FLOAT64);
 		paramHelper->bind("tcpPort", &tcpPort, ParamSet::ParamHelper::INTEGER);

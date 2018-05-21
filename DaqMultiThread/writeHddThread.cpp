@@ -119,10 +119,16 @@ namespace WriteHddThread
 	{
 		std::ofstream ofs_bit;
 		if (_writeFlag & BIT)
+		{
 			ofs_bit.open(_targetFileName, std::ios::binary | std::ios::app);
+			if (!ofs_bit.is_open()) std::cout << "Error opening file:" << _targetFileName << std::endl;
+		}
 		std::ofstream ofs_raw;
 		if (_writeFlag & RAW)
+		{
 			ofs_raw.open(_targetFileName + ".raw", std::ios::binary | std::ios::app);
+			if (!ofs_raw.is_open()) std::cout << "Error opening raw file:" << _targetFileName << std::endl;
+		}
 		while (true)
 		{
 			if (_writeCmd == EXIT && _dataQueue.size() == 0) break;
