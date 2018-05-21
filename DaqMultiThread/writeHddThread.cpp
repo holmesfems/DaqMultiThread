@@ -131,14 +131,14 @@ namespace WriteHddThread
 		boost::filesystem::ofstream ofs_bit;
 		if (_writeFlag & BIT)
 		{
-			ofs_bit.open(_targetFilePath, std::ios::binary | std::ios::app);
-			if (!ofs_bit.is_open()) std::cout << "Error opening file:" << _targetFileName << std::endl;
+			ofs_bit.open(_targetFilePath.replace_extension("dat"), std::ios::binary | std::ios::app);
+			if (!ofs_bit.is_open()) std::cout << "Error opening file:" << _targetFilePath.string() << std::endl;
 		}
 		std::ofstream ofs_raw;
 		if (_writeFlag & RAW)
 		{
-			ofs_raw.open(_targetFilePath + ".raw", std::ios::binary | std::ios::app);
-			if (!ofs_raw.is_open()) std::cout << "Error opening raw file:" << _targetFileName << std::endl;
+			ofs_raw.open(_targetFilePath.replace_extension("raw"), std::ios::binary | std::ios::app);
+			if (!ofs_raw.is_open()) std::cout << "Error opening raw file:" << _targetFilePath.string() << std::endl;
 		}
 		while (true)
 		{

@@ -376,7 +376,7 @@ int readThread()
 
 		for (int i = 0; i < wthreadNum; i++)
 		{
-			boost::filesystem::path targetFile = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
+			boost::filesystem::path targetFile = (boost::format("BS%s_%d") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
 			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(savePath / targetFile, writeFlag[i]));
 		}
 
