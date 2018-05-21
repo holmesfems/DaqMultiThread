@@ -66,6 +66,7 @@
 //#include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
+#include <boost/filesystem.hpp>
 #include <fstream>
 #include "ParamSet.h"
 #include "stringTool.h"
@@ -122,8 +123,6 @@ nlohmann::json configJson;
 //std::mutex parameterMutex;
 //std::mutex readDataMutex[2];
 
-//TargetFileName
-std::string targetFileName = "";
 
 //CmdHelper
 CmdHelper::CmdMap cmdMap;
@@ -272,6 +271,24 @@ int loadConfig()
 	return 0;
 }
 
+int createDir(std::string dir)
+{
+	boost::filesystem::path path(dir);
+	if (boost::filesystem::exists(path))
+	{
+		if (!boost::filesystem::is_directory(path))
+		{
+			output((boost::format("%s is not a directory name!") % path.string()).str());
+			return 1;
+		}
+		return 0;
+	}
+	else
+	{
+		return boost::filesystem::create_directories(path) ? 0 : 1;
+	}
+}
+
 int readThread()
 {
 	//Number of writing  HDD thread
@@ -350,11 +367,19 @@ int readThread()
 				}
 			}
 		}
+		if (createDir(savePath))
+		{
+			output((boost::format("Failed to create dir: %s") % savePath).str());
+			readStatus = HOLD;
+			continue;
+		}
+
 		for (int i = 0; i < wthreadNum; i++)
 		{
-			targetFileName = (boost::format("%s/BS%s_%d.dat") % savePath % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
-			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(targetFileName, writeFlag[i]));
+			boost::filesystem::path targetFile = (boost::format("BS%s_%d.dat") % boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) % (i + 1)).str();
+			wthreads[i] = sharePtr_wthread(new WriteHddThread::WriteHddThread(savePath / targetFile, writeFlag[i]));
 		}
+
 		if (DAQmxBaseCreateTask("", &taskHandle) < 0)
 			throw "Error in creating task";
 		if (DAQmxBaseCreateAIVoltageChan(taskHandle, channel.c_str(), "", DAQmx_Val_RSE, min, max, DAQmx_Val_Volts, NULL) < 0)
@@ -365,6 +390,7 @@ int readThread()
 		rdata = new float64[bufferSize*wthreadNum];
 		pointsToRead = samplesPerChan;
 		output((boost::format("start reading, readTime = %d") % readTime).str());
+		
 		//isReading = true;
 		DAQmxBaseStartTask(taskHandle);
 		for (nowReadTime = 0; nowReadTime < readTime || readTime < 0; nowReadTime++)

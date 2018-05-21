@@ -13,6 +13,7 @@
 #include <thread>
 #include <atomic>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/filesystem.hpp>
 namespace WriteHddThread
 {
 	class WriteParameter
@@ -39,7 +40,8 @@ namespace WriteHddThread
 	class WriteHddThread
 	{
 	public:
-		WriteHddThread(std::string &targetFileName,int writeFlag=BIT);
+		WriteHddThread(std::string &targetFileName, int writeFlag = BIT);
+		WriteHddThread(boost::filesystem::path &targetFilePath, int writeFlag = BIT);
 		~WriteHddThread();
 		void push(WriteParameter& wp);
 		void push(boost::posix_time::ptime &ptime, int32_t dataSize = 0, double_t* data = NULL);
@@ -49,7 +51,7 @@ namespace WriteHddThread
 		std::thread *_writeThread;
 		std::queue<WriteParameter> _dataQueue;
 		std::atomic<int> _writeCmd;
-		std::string _targetFileName;
+		boost::filesystem::path _targetFilePath;
 		void _threadFunction();
 		int _writeFlag;
 	};

@@ -61,7 +61,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
-    <IncludePath>C:\Users\zhaig\home\linuxtool\cpplibrary\boost_1_66_0;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\zhaig\home\linuxtool\cpplibrary\boost_1_67_0;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="CmdHelper.cpp" />

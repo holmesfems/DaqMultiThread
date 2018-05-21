@@ -88,7 +88,15 @@ namespace WriteHddThread
 
 
 	WriteHddThread::WriteHddThread(std::string &targetFileName,int writeFlag):
-		_targetFileName(targetFileName),
+		_targetFilePath(targetFileName),
+		_writeFlag(writeFlag)
+	{
+		_writeCmd = HOLD;
+		_writeThread = new std::thread(std::bind(&WriteHddThread::_threadFunction, this));
+	}
+
+	WriteHddThread::WriteHddThread(boost::filesystem::path &targetFilePath, int writeFlag):
+		_targetFilePath(targetFilePath),
 		_writeFlag(writeFlag)
 	{
 		_writeCmd = HOLD;
@@ -100,8 +108,11 @@ namespace WriteHddThread
 	{
 		//std::cout << "calling Destructor of WriteHddThread" << std::endl;
 		_writeCmd = EXIT;
-		_writeThread->join();
-		delete _writeThread;
+		if (_writeThread)
+		{
+			_writeThread->join();
+			delete _writeThread;
+		}
 	}
 
 	void WriteHddThread::push(WriteParameter &wp)
@@ -117,16 +128,16 @@ namespace WriteHddThread
 
 	void  WriteHddThread::_threadFunction()
 	{
-		std::ofstream ofs_bit;
+		boost::filesystem::ofstream ofs_bit;
 		if (_writeFlag & BIT)
 		{
-			ofs_bit.open(_targetFileName, std::ios::binary | std::ios::app);
+			ofs_bit.open(_targetFilePath, std::ios::binary | std::ios::app);
 			if (!ofs_bit.is_open()) std::cout << "Error opening file:" << _targetFileName << std::endl;
 		}
 		std::ofstream ofs_raw;
 		if (_writeFlag & RAW)
 		{
-			ofs_raw.open(_targetFileName + ".raw", std::ios::binary | std::ios::app);
+			ofs_raw.open(_targetFilePath + ".raw", std::ios::binary | std::ios::app);
 			if (!ofs_raw.is_open()) std::cout << "Error opening raw file:" << _targetFileName << std::endl;
 		}
 		while (true)
