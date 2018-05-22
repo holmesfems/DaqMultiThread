@@ -40,8 +40,7 @@ namespace WriteHddThread
 	class WriteHddThread
 	{
 	public:
-		WriteHddThread(std::string &targetFileName, int writeFlag = BIT);
-		WriteHddThread(boost::filesystem::path &targetFilePath, int writeFlag = BIT);
+		WriteHddThread(boost::filesystem::path targetFilePath, int writeFlag = BIT);
 		~WriteHddThread();
 		void push(WriteParameter& wp);
 		void push(boost::posix_time::ptime &ptime, int32_t dataSize = 0, double_t* data = NULL);

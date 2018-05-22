@@ -86,16 +86,7 @@ namespace WriteHddThread
 		return 0;
 	}
 
-
-	WriteHddThread::WriteHddThread(std::string &targetFileName,int writeFlag):
-		_targetFilePath(targetFileName),
-		_writeFlag(writeFlag)
-	{
-		_writeCmd = HOLD;
-		_writeThread = new std::thread(std::bind(&WriteHddThread::_threadFunction, this));
-	}
-
-	WriteHddThread::WriteHddThread(boost::filesystem::path &targetFilePath, int writeFlag):
+	WriteHddThread::WriteHddThread(boost::filesystem::path targetFilePath, int writeFlag):
 		_targetFilePath(targetFilePath),
 		_writeFlag(writeFlag)
 	{
