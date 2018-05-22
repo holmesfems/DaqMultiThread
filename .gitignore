@@ -30,3 +30,16 @@
 *.exe
 *.out
 *.app
+.vs/DaqMultiThread/v15/ipch/AutoPCH/733ed7eb9168f4a8/WRITEHDDTHREAD.ipch
+.vs/ProjectSettings.json
+.vs/VSWorkspaceState.json
+.vs/slnx.sqlite
+.vs/DaqMultiThread/v15/.suo
+.vs/DaqMultiThread/v15/Browse.VC.db
+.vs/DaqMultiThread/v15/ipch/AutoPCH/3d8e2ec354cb3f27/CMDHELPER.ipch
+.vs/DaqMultiThread/v15/ipch/AutoPCH/6ee961676c21fa51/TCPSERVER.ipch
+.vs/DaqMultiThread/v15/ipch/AutoPCH/b8890ae2753526c8/MAIN.ipch
+.vs/DaqMultiThread/v15/ipch/AutoPCH/f64ed64bc6fdaa8e/PARAMSET.ipch
+.vs/config/applicationhost.config
+.vscode/c_cpp_properties.json
+DaqMultiThread/obj/x64/Debug/DaqMultiThread.log
