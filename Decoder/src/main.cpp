@@ -15,8 +15,9 @@
 #include <fstream>
 #include "stringTool.h"
 #include "writeHddThread.h"
-using int32 = int
-using float64 = double
+using int32 = int;
+using float64 = double;
+using int8 = char;
 
 #define DAQmxErrChk(functionCall) { if( DAQmxFailed(error=(functionCall)) ) { goto Error; } 
 //ParamFilter
