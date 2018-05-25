@@ -16,16 +16,6 @@
 #include <boost/filesystem.hpp>
 namespace WriteHddThread
 {
-	class WriteParameter
-	{
-	public:
-		int32_t dataSize;
-		boost::posix_time::ptime ptime;
-		std::vector<double_t> data;
-		WriteParameter(boost::posix_time::ptime &ptime, int32_t dataSize = 0, double_t* data = NULL);
-		~WriteParameter();
-	};
-
 	class Header
 	{
 	public:

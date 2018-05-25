@@ -1,99 +1,20 @@
 
 #include <stdio.h>
 #include <iostream>
-#include <thread>
-#include <mutex>
-#include <atomic>
 #include <queue>
 #include <vector>
-#include <algorithm>
 #include <sstream>
 //#include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
-#include <boost/filesystem.hpp>
 #include <fstream>
-#include "stringTool.h"
+
 #include "writeHddThread.h"
 using int32 = int;
 using float64 = double;
 using int8 = char;
 
-#define DAQmxErrChk(functionCall) { if( DAQmxFailed(error=(functionCall)) ) { goto Error; } 
-//ParamFilter
-using Filter = std::vector<std::string>;
-
-//Default parameters
-//Task parameters
-int32       error = 0;
-char        errBuff[2048] = { '\0' };
-int32       i;
-
-//Channel parameters
-//char       chan[] = "Dev1/ai0";
-std::string channel = "Dev1/ai0";
-float64     min = -1.0;
-float64     max = 6.0;
-
-//Timing parameters
-//char        source[] = "OnboardClock";
-std::string source = "OnboardClock";
-int32       samplesPerChan = 80000;
-float64     sampleRate = 80000.0;
-
-// Data read parameters
 int32       bufferSize = 80814;
-//float64     *data1;
-//float64     *data2;
-//float64     *(data[2]);
-int32       pointsToRead = -1;
-float64     timeout = 10.0; //sec
-
-// ReadTime
-std::atomic<int32> readTime;//sec,-1 for infinity
-std::atomic<int32> nowReadTime;
-
-//SaveConfig::Config *config;
-const std::string configFileName = "parameter.conf";
-std::string savePath = ".";
-//Mutex
-//std::mutex writeFileMutex;
-//std::mutex parameterMutex;
-//std::mutex readDataMutex[2];
-
-//CheckOnOff
-double_t &checkA = WriteHddThread::checkA;
-double_t &checkB = WriteHddThread::checkB;
-
-//Flags
-std::atomic<int> readStatus;
-const int HOLD = 0;
-const int DO = 1;
-const int EXIT = -1;
-
-bool use_TCP = false;
-
-//ip config
-std::string ip_host = "127.0.0.1";
-//Tcp parameters
-uint16_t tcpPort = 23333;
-
-
-std::string saveMode = "BIT";
-
-int output_local(std::string msg)
-{
-	std::cout << boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time()) << "\t" << msg << std::endl;
-	std::cout.flush();
-	return 0;
-}
-
-int output(std::string msg)
-{
-	output_local(msg);
-	return 0;
-}
-
 
 int decode(std::string source, std::string target)
 {

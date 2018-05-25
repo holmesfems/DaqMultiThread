@@ -13,13 +13,13 @@
 # project name (generate executable with this name)
 TARGET   = decoder
 
-CC       = clang++
+CC       = x86_64-w64-mingw32-g++
 # compiling flags here
 CFLAGS   = -std=c++11 -Wall -I.
 
 LINKER   = $(CC) -o
 # linking flags here
-LFLAGS   = -Wall -I. -l"nidaqmxbase" -l"boost_system" -l"boost_filesystem" -l"boost_date_time"
+LFLAGS   = -Wall -I. -lboost_date_time-mt -lboost_system-mt
 
 # change these to proper directories where each file should be
 SRCDIR   = src
