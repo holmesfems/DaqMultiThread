@@ -26,7 +26,6 @@ using Filter = std::vector<std::string>;
 //Default parameters
 //Task parameters
 int32       error = 0;
-TaskHandle  taskHandle = 0;
 char        errBuff[2048] = { '\0' };
 int32       i;
 
@@ -95,27 +94,6 @@ int output(std::string msg)
 	return 0;
 }
 
-//!Save the parameter in paramHelper to a config file
-nlohmann::json paramHelperToJson(ParamSet::ParamHelper &ph)
-{
-	nlohmann::json json;
-	for (auto item : ph.bindlist())
-	{
-		switch (item.second.second)
-		{
-		case ParamSet::ParamHelper::INTEGER:
-			json[item.first] = *((int*)item.second.first);
-			break;
-		case ParamSet::ParamHelper::TEXT:
-			json[item.first] = *((std::string*)item.second.first);
-			break;
-		case ParamSet::ParamHelper::FLOAT64:
-			json[item.first] = *((double*)item.second.first);
-			break;
-		}
-	}
-	return json;
-}
 
 int decode(std::string source, std::string target)
 {
