@@ -15,7 +15,8 @@
 #include <fstream>
 #include "stringTool.h"
 #include "writeHddThread.h"
-#include "json.hpp"
+using int32 = int
+using float64 = double
 
 #define DAQmxErrChk(functionCall) { if( DAQmxFailed(error=(functionCall)) ) { goto Error; } 
 //ParamFilter
