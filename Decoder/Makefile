@@ -11,7 +11,7 @@
 # ------------------------------------------------
 
 # project name (generate executable with this name)
-TARGET   = daqMultiThread
+TARGET   = decoder
 
 CC       = clang++
 # compiling flags here
@@ -22,7 +22,7 @@ LINKER   = $(CC) -o
 LFLAGS   = -Wall -I. -l"nidaqmxbase" -l"boost_system" -l"boost_filesystem" -l"boost_date_time"
 
 # change these to proper directories where each file should be
-SRCDIR   = DaqMultiThread
+SRCDIR   = src
 OBJDIR   = obj
 BINDIR   = bin
 
@@ -38,11 +38,6 @@ $(BINDIR)/$(TARGET): $(OBJECTS)
 $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 	@echo "Compiled "$<" successfully!"
-
-.PHONY: decoder:
-	cd Decoder
-	make
-	@echo "Make complete!"
 
 .PHONY: clean
 clean:
