@@ -79,10 +79,6 @@ std::string ip_host = "127.0.0.1";
 //Tcp parameters
 uint16_t tcpPort = 23333;
 
-std::future<bool> readStartFlag;
-std::promise<bool> readStartFlag_writer;
-//std::atomic<bool> isReading;
-
 
 std::string saveMode = "BIT";
 
@@ -93,21 +89,9 @@ int output_local(std::string msg)
 	return 0;
 }
 
-int output_toClient(std::string msg)
-{
-	TcpServer::TcpServer *server = tcpServer;
-	if (server)
-	{
-		if (server->is_online(0))
-			server->send(msg);
-	}
-	return 0;
-}
-
 int output(std::string msg)
 {
 	output_local(msg);
-	output_toClient(msg);
 	return 0;
 }
 
@@ -131,90 +115,6 @@ nlohmann::json paramHelperToJson(ParamSet::ParamHelper &ph)
 		}
 	}
 	return json;
-}
-
-
-int saveConfig()
-{
-	configJson = paramHelperToJson(*paramHelper);
-	std::ofstream ofs(configFileName);
-	if (ofs.is_open())
-	{
-		ofs << configJson.dump(4);
-		output_local("Save config succeed!");
-	}
-	else
-	{
-		output_local((boost::format("Can't open file: %s") % configFileName).str());
-	}
-	ofs.close();
-	return 0;
-}
-
-//!Load parameters from config file to paramHelper
-int loadConfig()
-{
-	std::ifstream ifs(configFileName);
-
-	if (ifs.is_open())
-	{ //file exists
-		try
-		{
-			output_local("Read Configuation file succeed!");
-			configJson.clear();
-			ifs >> configJson;
-			ParamSet::VariableBind bind = paramHelper->bindlist();
-			for (auto &item : configJson.items())
-			{
-				if (bind.find(item.key()) == bind.cend())
-				{
-					output_local((boost::format("Error occured: key \"%s\" is not valid") % item.key()).str());
-					continue;
-				}
-				ParamSet::VariableBindItem binditem = bind[item.key()];
-				switch (binditem.second)
-				{
-				case ParamSet::ParamHelper::INTEGER:
-					*((int*)binditem.first) = configJson[item.key()].get<int>();
-					break;
-				case ParamSet::ParamHelper::TEXT:
-					*((std::string*)binditem.first) = configJson[item.key()].get<std::string>();
-					break;
-				case ParamSet::ParamHelper::FLOAT64:
-					*((double*)binditem.first) = configJson[item.key()].get<double>();
-					break;
-				}
-			}
-		}
-		catch(std::exception e)
-		{
-			output_local((boost::format("Error occured while reading config file:%s") % e.what()).str());
-		}
-	}
-	else
-	{ //file not exists
-		saveConfig();
-	}
-	ifs.close();
-	return 0;
-}
-
-int createDir(std::string dir)
-{
-	boost::filesystem::path path(dir);
-	if (boost::filesystem::exists(path))
-	{
-		if (!boost::filesystem::is_directory(path))
-		{
-			output((boost::format("%s is not a directory name!") % path.string()).str());
-			return 1;
-		}
-		return 0;
-	}
-	else
-	{
-		return boost::filesystem::create_directories(path) ? 0 : 1;
-	}
 }
 
 int decode(std::string source, std::string target)
